@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OrbitPulse 3D — 실시간 인공위성 3D 구글 지도 추적기</title>
+  <meta
+    name="description"
+    content="CelesTrak 실시간 궤도 요소(OMM/TLE)와 SGP4 역학 엔진으로 ISS, 아리랑, 천리안, 스타링크 등 실제 인공위성 위치를 3D 구글 지도 위에 실시간 추적합니다."
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+</head>
+<body>
+  <main id="app" class="app-shell">
+    <!-- 3D Viewport Containers -->
+    <div id="cesium-container" class="viewport-canvas" aria-label="3D 지구본 및 Google Photorealistic 3D Tiles 뷰포트"></div>
+    <div id="gmaps3d-container" class="viewport-canvas" style="display: none;" aria-label="Google Maps 3D 네이티브 뷰포트"></div>
+
+    <!-- Hover Tooltip -->
+    <div id="sat-tooltip" class="sat-tooltip" hidden></div>
+
+    <!-- Left Floating Panel: Satellite Browser -->
+    <aside id="left-drawer" class="hud-panel left-drawer" aria-label="인공위성 목록 및 검색">
+      <header class="drawer-header">
+        <div class="brand-group">
+          <div class="brand-mark" id="brand-icon"></div>
+          <div>
+            <h1 class="brand-title">OrbitPulse 3D</h1>
+            <p class="brand-subtitle" id="engine-status-text">실시간 SGP4 · 3D 구글 위성 지구본</p>
+          </div>
+        </div>
+        <button id="btn-collapse-drawer" class="icon-btn" title="목록 접기" aria-label="목록 접기"></button>
+      </header>
+
+      <div class="search-section">
+        <div class="search-input-wrap">
+          <span class="search-icon" id="search-icon"></span>
+          <input
+            id="sat-search"
+            type="search"
+            placeholder="위성 이름 또는 NORAD ID 검색 (예: ISS, 25544)"
+            autocomplete="off"
+          />
+        </div>
+        <div id="category-tabs" class="category-tabs" role="tablist" aria-label="위성 카테고리"></div>
+      </div>
+
+      <div class="list-meta">
+        <span id="list-count-text">위성 불러오는 중...</span>
+        <button id="btn-refresh-data" class="text-btn" title="CelesTrak 최신 궤도 데이터 동기화">
+          <span class="btn-ic" id="refresh-icon"></span>
+          동기화
+        </button>
+      </div>
+
+      <div id="sat-list" class="sat-list" role="listbox" aria-label="추적 중인 위성 목록"></div>
+    </aside>
+
+    <!-- Collapsed Drawer Re-open Button -->
+    <button id="btn-expand-drawer" class="hud-chip expand-drawer-btn" hidden title="위성 목록 열기">
+      <span class="btn-ic" id="expand-icon"></span>
+      <span>위성 목록</span>
+    </button>
+
+    <!-- Top-Right Control Bar -->
+    <nav class="top-controls" aria-label="지도 엔진 및 설정 도구">
+      <div class="hud-segmented" role="group" aria-label="3D 지도 엔진 선택">
+        <button id="eng-globe" class="seg-btn active" data-engine="globe" title="즉시 실행 3D 위성 지구본 (API 키 불필요)">
+          3D 지구본
+        </button>
+        <button id="eng-google-tiles" class="seg-btn" data-engine="google-tiles" title="Google Maps Photorealistic 3D Tiles (Map Tiles API 키 필요)">
+          Google 3D Tiles
+        </button>
+        <button id="eng-google-native" class="seg-btn" data-engine="google-native" title="Google Maps JS API 3D (Maps JS API 키 필요)">
+          Google Maps 3D
+        </button>
+      </div>
+
+      <div class="control-actions">
+        <button id="btn-layers" class="hud-chip" title="지도 레이어 및 관측소 설정">
+          <span class="btn-ic" id="layers-icon"></span>
+          <span>레이어</span>
+        </button>
+        <button id="btn-add-sat" class="hud-chip" title="NORAD ID 또는 TLE 직접 추가">
+          <span class="btn-ic" id="plus-icon"></span>
+          <span>위성 추가</span>
+        </button>
+        <button id="btn-api-key" class="hud-chip" title="Google Maps API 키 설정">
+          <span class="btn-ic" id="key-icon"></span>
+          <span id="api-key-label">Google API 키</span>
+        </button>
+      </div>
+
+      <!-- Layers & Observer Popover -->
+      <div id="layers-popover" class="hud-panel popover-panel" hidden>
+        <div class="popover-section">
+          <div class="popover-label">배경 지도 스타일</div>
+          <div id="basemap-options" class="option-grid">
+            <button class="opt-btn active" data-basemap="google-hybrid">Google 하이브리드</button>
+            <button class="opt-btn" data-basemap="google-satellite">Google 위성</button>
+            <button class="opt-btn" data-basemap="esri-imagery">Esri 위성</button>
+            <button class="opt-btn" data-basemap="dark">다크 지도</button>
+          </div>
+        </div>
+
+        <div class="popover-section">
+          <div class="popover-label">3D 시각화 옵션</div>
+          <label class="toggle-row">
+            <span>실시간 태양광 (주/야간)</span>
+            <input id="toggle-lighting" type="checkbox" checked />
+          </label>
+          <label class="toggle-row">
+            <span>선택 위성 3D 궤도 표시</span>
+            <input id="toggle-orbit" type="checkbox" checked />
+          </label>
+          <label class="toggle-row">
+            <span>지상 커버리지 및 직하선</span>
+            <input id="toggle-footprint" type="checkbox" checked />
+          </label>
+        </div>
+
+        <div class="popover-section">
+          <div class="popover-label">지상 관측소 (통과 예측 기준)</div>
+          <select id="observer-select" class="hud-select" aria-label="지상 관측소 선택"></select>
+          <button id="btn-geolocate" class="secondary-btn full-width" style="margin-top: 8px;">
+            현재 내 위치(GPS) 사용
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Right Floating Telemetry Inspector -->
+    <section id="telemetry-panel" class="hud-panel telemetry-panel" hidden aria-label="선택된 인공위성 실시간 텔레메트리">
+      <header class="telemetry-header">
+        <div class="telemetry-title-wrap">
+          <div class="telemetry-badges">
+            <span id="tel-regime" class="badge badge-regime">LEO</span>
+            <span id="tel-group" class="badge badge-group">우주정거장</span>
+            <span id="tel-norad" class="mono-tag">NORAD 25544</span>
+          </div>
+          <h2 id="tel-name" class="telemetry-title">국제우주정거장 (ISS)</h2>
+          <p id="tel-original-name" class="telemetry-sub"></p>
+        </div>
+        <button id="btn-close-telemetry" class="icon-btn" title="패널 닫기" aria-label="패널 닫기"></button>
+      </header>
+
+      <p id="tel-summary" class="telemetry-summary" hidden></p>
+
+      <div class="telemetry-actions">
+        <button id="btn-follow" class="action-btn">
+          <span class="btn-ic" id="follow-icon"></span>
+          <span>카메라 추적</span>
+        </button>
+        <button id="btn-flyto" class="action-btn">
+          <span class="btn-ic" id="flyto-icon"></span>
+          <span>위치 이동</span>
+        </button>
+      </div>
+
+      <div class="telemetry-section">
+        <div class="section-heading">실시간 위치 · 궤도 제원</div>
+        <div class="telemetry-grid">
+          <div class="metric-cell">
+            <span class="metric-label">위도 (LAT)</span>
+            <span id="tel-lat" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">경도 (LON)</span>
+            <span id="tel-lon" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">고도 (ALT)</span>
+            <span id="tel-alt" class="metric-value mono highlight">--</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">궤도 속도</span>
+            <span id="tel-speed" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">공전 주기</span>
+            <span id="tel-period" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">궤도 경사각</span>
+            <span id="tel-inc" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">근지점 / 원지점</span>
+            <span id="tel-apsis" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-label">지상 가시 반경</span>
+            <span id="tel-footprint" class="metric-value mono">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="telemetry-section">
+        <div class="section-heading-row">
+          <span class="section-heading" id="tel-observer-heading">관측소 시선각 (서울)</span>
+          <span id="tel-visibility-pill" class="vis-status">지평선 아래</span>
+        </div>
+        <div class="telemetry-grid three-col">
+          <div class="metric-cell compact">
+            <span class="metric-label">방위각 (AZ)</span>
+            <span id="tel-az" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell compact">
+            <span class="metric-label">고도각 (EL)</span>
+            <span id="tel-el" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell compact">
+            <span class="metric-label">직선거리</span>
+            <span id="tel-range" class="metric-value mono">--</span>
+          </div>
+        </div>
+        <div id="tel-pass-box" class="pass-box">
+          다음 통과 시각 계산 중...
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom Floating Time & Simulation Control Bar -->
+    <footer class="bottom-bar hud-panel" aria-label="실시간 시뮬레이션 시간 제어">
+      <div class="clock-block">
+        <button id="btn-live-now" class="live-badge is-live" title="실시간 현재 시각으로 복귀">
+          <span class="live-dot"></span>
+          <span>LIVE</span>
+        </button>
+        <div class="clock-readout">
+          <div id="clock-kst" class="clock-main mono">--:--:-- KST</div>
+          <div id="clock-utc" class="clock-sub mono">-- UTC</div>
+        </div>
+      </div>
+
+      <div class="sim-controls">
+        <button id="btn-play-pause" class="icon-btn" title="재생 / 일시정지" aria-label="재생 또는 일시정지"></button>
+        <div id="speed-buttons" class="speed-group" role="group" aria-label="시간 배속">
+          <button class="speed-btn active" data-speed="1">1×</button>
+          <button class="speed-btn" data-speed="10">10×</button>
+          <button class="speed-btn" data-speed="60">60×</button>
+          <button class="speed-btn" data-speed="300">300×</button>
+          <button class="speed-btn" data-speed="1000">1000×</button>
+        </div>
+      </div>
+
+      <div class="sync-block">
+        <span id="sync-status" class="sync-text mono">CelesTrak 동기화 중...</span>
+      </div>
+    </footer>
+
+    <!-- Modal: Google Maps API Key Configuration -->
+    <div id="modal-api-key" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="modal-api-title">
+      <div class="hud-panel modal-card">
+        <div class="modal-header">
+          <h2 id="modal-api-title">Google Maps 3D API 키 설정</h2>
+          <button class="icon-btn modal-close" data-close-modal="modal-api-key" aria-label="닫기"></button>
+        </div>
+        <p class="modal-desc">
+          Google Cloud Console에서 발급받은 API 키를 입력하면 실제 3D 건물과 지형이 포함된
+          <strong>Google Photorealistic 3D Tiles</strong> 및 <strong>Google Maps 3D(&lt;gmp-map-3d&gt;)</strong> 엔진을 즉시 활성화할 수 있습니다.
+        </p>
+        <div class="guide-box">
+          <div class="guide-title">권장 Google Cloud API 활성화 항목</div>
+          <ul>
+            <li><strong>Map Tiles API</strong> — CesiumJS 위에서 Google Photorealistic 3D Tiles 렌더링</li>
+            <li><strong>Maps JavaScript API</strong> — Google Maps 3D 네이티브 엔진(&lt;gmp-map-3d&gt;) 사용</li>
+          </ul>
+        </div>
+        <label class="field-label" for="input-google-key">Google Maps API Key</label>
+        <input
+          id="input-google-key"
+          type="password"
+          class="hud-input mono"
+          placeholder="AIzaSy..."
+          autocomplete="off"
+        />
+        <p class="field-hint">키는 현재 브라우저(localStorage)에만 저장되며 외부 서버로 전송되지 않습니다.</p>
+        <div class="modal-footer">
+          <button id="btn-clear-api-key" class="secondary-btn">키 삭제</button>
+          <div class="modal-footer-right">
+            <button class="secondary-btn" data-close-modal="modal-api-key">취소</button>
+            <button id="btn-save-api-key" class="primary-btn">저장 및 3D 적용</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Add Custom Satellite (NORAD ID or TLE) -->
+    <div id="modal-add-sat" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="modal-add-title">
+      <div class="hud-panel modal-card">
+        <div class="modal-header">
+          <h2 id="modal-add-title">인공위성 직접 추가</h2>
+          <button class="icon-btn modal-close" data-close-modal="modal-add-sat" aria-label="닫기"></button>
+        </div>
+        <div class="modal-section">
+          <label class="field-label" for="input-norad-id">1. NORAD Catalog ID로 실시간 조회 (CelesTrak)</label>
+          <div class="inline-row">
+            <input id="input-norad-id" type="text" class="hud-input mono" placeholder="예: 25544 (ISS), 20580 (Hubble), 43823 (천리안 2A)" />
+            <button id="btn-fetch-norad" class="primary-btn">조회 추가</button>
+          </div>
+        </div>
+        <div class="modal-divider"><span>또는</span></div>
+        <div class="modal-section">
+          <label class="field-label" for="input-tle-text">2. TLE (Two-Line Element) 직접 입력</label>
+          <textarea
+            id="input-tle-text"
+            class="hud-textarea mono"
+            rows="4"
+            placeholder="위성 이름 (선택)&#10;1 25544U 98067A   ...&#10;2 25544  51.6400 ..."
+          ></textarea>
+          <div class="modal-footer">
+            <span></span>
+            <button id="btn-parse-tle" class="primary-btn">TLE 위성 추가</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Stack -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+  </main>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
