@@ -725,6 +725,34 @@ body {
 .model-type-label {
   color: var(--text-primary);
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.fidelity-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.fidelity-nasa {
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+}
+
+.fidelity-spec {
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+}
+
+.fidelity-estimated {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
 }
 
 .model-lod-pill {

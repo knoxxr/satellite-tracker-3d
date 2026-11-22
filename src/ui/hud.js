@@ -489,7 +489,10 @@ export class HudController {
 
     const modelMeta = getSatelliteModelMeta(record);
     if (this.el.telModelType) {
-      this.el.telModelType.textContent = modelMeta.label;
+      this.el.telModelType.innerHTML = `
+        <span>${escapeHtml(modelMeta.label)}</span>
+        <span class="fidelity-tag fidelity-${modelMeta.fidelity}">${escapeHtml(modelMeta.fidelityLabel)}</span>
+      `;
     }
 
     this.el.telLat.textContent = fmtCoord(pos.lat, 'N', 'S');

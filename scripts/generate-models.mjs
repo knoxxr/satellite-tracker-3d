@@ -501,6 +501,97 @@ function buildStarlinkModel() {
   return b.toGlbBuffer();
 }
 
+/** 7. Chinese Space Station Tiangong (CSS Tianhe + Wentian + Mengtian real T-shape) */
+function buildTiangongModel() {
+  const b = new GlbBuilder();
+  const m = addSharedMaterials(b);
+
+  // Tianhe Core Module along X axis (aft service + pressurized habitat + forward docking hub)
+  b.addCylinder(m.whiteThermal, -1.5, 0, 0, 1.85, 2.0, 11.5, 16, [0, 0, Math.PI / 2]);
+  b.addCylinder(m.silverHull, -8.8, 0, 0, 1.5, 1.85, 3.2, 16, [0, 0, Math.PI / 2]);
+  // Docking node sphere-cylinder hub at +X
+  b.addCylinder(m.whiteThermal, 5.6, 0, 0, 1.65, 1.65, 3.2, 14, [0, 0, Math.PI / 2]);
+  // Docked Tianzhou cargo craft (-X) and Shenzhou crew craft (+X)
+  b.addCylinder(m.silverHull, -13.2, 0, 0, 1.3, 1.45, 5.6, 14, [0, 0, Math.PI / 2]);
+  b.addCylinder(m.whiteThermal, 9.6, 0, 0, 0.85, 1.35, 4.8, 14, [0, 0, -Math.PI / 2]);
+
+  // Iconic T-shape: Wentian (+Z) and Mengtian (-Z) laboratory modules branching from hub
+  b.addCylinder(m.whiteThermal, 5.6, 0, 7.6, 1.8, 1.8, 12.2, 16, [Math.PI / 2, 0, 0]);
+  b.addCylinder(m.whiteThermal, 5.6, 0, -7.6, 1.8, 1.8, 12.2, 16, [Math.PI / 2, 0, 0]);
+  b.addCylinder(m.silverHull, 5.6, 0, 14.5, 1.3, 1.65, 2.0, 14, [Math.PI / 2, 0, 0]);
+  b.addCylinder(m.silverHull, 5.6, 0, -14.5, 1.3, 1.65, 2.0, 14, [Math.PI / 2, 0, 0]);
+
+  // Iconic Tiangong flexible dual-wing solar arrays at outer tips of Wentian & Mengtian
+  for (const z of [-15.2, 15.2]) {
+    b.addSolarWing(m.solarBlue, m.silverHull, 12.8, 0, z, 19.5, 4.4, 5, [0.15, 0, 0]);
+    b.addSolarWing(m.solarBlue, m.silverHull, -1.6, 0, z, 19.5, 4.4, 5, [0.15, 0, 0]);
+    b.addBox(m.trussMetal, 5.6, 0, z, 6.2, 0.4, 0.4);
+  }
+  // Smaller Tianhe core solar wings
+  b.addSolarWing(m.solarBlue, m.silverHull, -6.5, 0, 6.4, 3.2, 7.2, 3, [0.2, 0, 0]);
+  b.addSolarWing(m.solarBlue, m.silverHull, -6.5, 0, -6.4, 3.2, 7.2, 3, [0.2, 0, 0]);
+
+  return b.toGlbBuffer();
+}
+
+/** 8. KOMPSAT-5 (Arirang-5) X-band SAR Earth Observation Satellite */
+function buildKompsatSarModel() {
+  const b = new GlbBuilder();
+  const m = addSharedMaterials(b);
+
+  // Hexagonal gold-MLI spacecraft bus
+  b.addCylinder(m.goldFoil, 0, 0.6, 0, 1.9, 1.9, 4.8, 6, [0, 0, Math.PI / 2]);
+  b.addCylinder(m.silverHull, 2.6, 0.6, 0, 1.6, 1.9, 0.5, 6, [0, 0, Math.PI / 2]);
+
+  // Iconic long flat X-band Synthetic Aperture Radar (SAR) active phased-array panel angled toward Earth
+  b.addBox(m.trussMetal, 0, -1.65, 0.55, 8.6, 0.35, 2.6, [0.52, 0, 0]);
+  b.addBox(m.whiteThermal, 0, -1.85, 0.68, 8.2, 0.14, 2.35, [0.52, 0, 0]);
+  // SAR radar sub-tile dividers
+  for (const x of [-2.8, 0, 2.8]) {
+    b.addBox(m.darkCarbon, x, -1.88, 0.70, 0.12, 0.16, 2.35, [0.52, 0, 0]);
+  }
+  // Mounting struts
+  b.addBox(m.trussMetal, -2.0, -0.6, 0.2, 0.25, 1.8, 0.25);
+  b.addBox(m.trussMetal, 2.0, -0.6, 0.2, 0.25, 1.8, 0.25);
+
+  // Deployable side-mounted solar array wings
+  b.addBox(m.trussMetal, 0, 1.8, -4.6, 0.3, 0.3, 9.2);
+  b.addSolarWing(m.solarBlue, m.silverHull, 0, 1.9, -6.4, 3.6, 8.4, 4, [-0.28, 0, 0]);
+
+  return b.toGlbBuffer();
+}
+
+/** 9. GEO-KOMPSAT-2A/2B (Cheollian-2) & GOES-R Series — Real Asymmetric Single-Wing + Solar Sail */
+function buildGk2WeatherModel() {
+  const b = new GlbBuilder();
+  const m = addSharedMaterials(b);
+
+  // Compact cubic gold-foil & white radiator GEO weather bus
+  b.addBox(m.goldFoil, 0, 0, 0, 4.2, 4.6, 4.2);
+  b.addBox(m.whiteThermal, 0, 0, 2.16, 3.6, 3.8, 0.14);
+  b.addBox(m.whiteThermal, 0, 0, -2.16, 3.6, 3.8, 0.14);
+
+  // Earth-facing (-Y) AMI / GOCI-II optical imager sunshade & aperture hood
+  b.addBox(m.darkCarbon, 0.3, -2.9, 0.2, 2.6, 1.5, 2.4);
+  b.addCylinder(m.lensGlass, 0.3, -3.65, 0.2, 0.85, 0.85, 0.2, 16);
+  // S/X-band meteorological downlink dish
+  b.addDish(m.whiteThermal, -1.6, -2.6, -1.2, 1.15, 0.32, 16, 3, [Math.PI * 0.9, 0, 0.2]);
+
+  // Iconic REAL GEO weather satellite feature #1: Single long 5-panel solar wing on South (+Z) side
+  b.addBox(m.trussMetal, 0, 0.2, 9.8, 0.35, 0.35, 16.5);
+  b.addSolarWing(m.solarBlue, m.silverHull, 0, 0.2, 11.4, 4.4, 15.0, 5, [0.18, 0, 0]);
+
+  // Iconic REAL GEO weather satellite feature #2: North (-Z) solar-sail boom to balance solar radiation pressure
+  b.addCylinder(m.trussMetal, 0, 0.2, -7.2, 0.16, 0.16, 10.2, 8, [Math.PI / 2, 0, 0]);
+  b.addCylinder(m.silverHull, 0, 0.2, -13.2, 0.1, 2.1, 3.2, 4, [Math.PI / 2, 0, 0]);
+
+  // Space-weather magnetometer boom extending from +X
+  b.addCylinder(m.trussMetal, 4.4, 1.2, 0, 0.08, 0.08, 4.8, 6, [0, 0, Math.PI / 2]);
+  b.addBox(m.accentCyan, 6.9, 1.2, 0, 0.45, 0.45, 0.45);
+
+  return b.toGlbBuffer();
+}
+
 const MODELS = {
   'station.glb': buildStationModel,
   'earth_obs.glb': buildEarthObsModel,
@@ -508,6 +599,9 @@ const MODELS = {
   'gnss.glb': buildGnssModel,
   'telescope.glb': buildTelescopeModel,
   'starlink.glb': buildStarlinkModel,
+  'tiangong.glb': buildTiangongModel,
+  'kompsat_sar.glb': buildKompsatSarModel,
+  'gk2_weather.glb': buildGk2WeatherModel,
 };
 
 let totalBytes = 0;
@@ -518,4 +612,4 @@ for (const [filename, builder] of Object.entries(MODELS)) {
   totalBytes += buf.length;
   console.log(`Generated ${filename}: ${(buf.length / 1024).toFixed(1)} KB`);
 }
-console.log(`Total 6 PBR GLB models: ${(totalBytes / 1024).toFixed(1)} KB`);
+console.log(`Total ${Object.keys(MODELS).length} procedural PBR GLB models: ${(totalBytes / 1024).toFixed(1)} KB`);

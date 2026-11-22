@@ -290,6 +290,34 @@ export class CesiumSatelliteEngine {
     scene.globe.depthTestAgainstTerrain = false;
     scene.highDynamicRange = false;
 
+    // Dedicated aerospace key-light so 3D spacecraft models (including NASA CAD) are always vividly shaded
+    this.spacecraftLight = new Cesium.DirectionalLight({
+      direction: new Cesium.Cartesian3(0.5, 0.5, -0.7),
+      intensity: 2.6,
+    });
+    scene.light = this.spacecraftLight;
+    scene.preRender.addEventListener(() => {
+      if (!this.viewer || this.viewer.isDestroyed()) return;
+      if (!this.enableLighting && this.spacecraftLight) {
+        // Offset key light ~30 deg up-right of camera view for crisp 3D depth shading
+        const cam = this.viewer.camera;
+        const dir = Cesium.Cartesian3.clone(cam.directionWC, new Cesium.Cartesian3());
+        Cesium.Cartesian3.add(
+          dir,
+          Cesium.Cartesian3.multiplyByScalar(cam.rightWC, -0.45, new Cesium.Cartesian3()),
+          dir
+        );
+        Cesium.Cartesian3.add(
+          dir,
+          Cesium.Cartesian3.multiplyByScalar(cam.upWC, -0.35, new Cesium.Cartesian3()),
+          dir
+        );
+        if (Cesium.Cartesian3.magnitude(dir) > 1e-4) {
+          this.spacecraftLight.direction = Cesium.Cartesian3.normalize(dir, dir);
+        }
+      }
+    });
+
     if (this.viewer.cesiumWidget.creditContainer) {
       this.viewer.cesiumWidget.creditContainer.classList.add('cesium-credit-minimal');
     }
@@ -492,6 +520,7 @@ export class CesiumSatelliteEngine {
     this.enableLighting = enabled;
     if (this.viewer) {
       this.viewer.scene.globe.enableLighting = enabled;
+      this.viewer.scene.light = enabled ? new Cesium.SunLight({ intensity: 2.4 }) : this.spacecraftLight;
     }
   }
 
@@ -629,33 +658,57 @@ export class CesiumSatelliteEngine {
       return;
     }
 
-    const url = `${MODELS_BASE_URL}${meta.file}`;
-    const loadPromise = Cesium.Model.fromGltfAsync({
-      url,
-      modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(DEFAULT_ORBIT_POS),
-      scale: meta.scale,
-      minimumPixelSize: 92,
-      maximumScale: 6500,
-      upAxis: Cesium.Axis.Y,
-      forwardAxis: Cesium.Axis.X,
-      lightColor: new Cesium.Cartesian3(2.5, 2.5, 2.5),
-      shadows: Cesium.ShadowMode.DISABLED,
-      show: false,
-    })
-      .then((model) => {
-        if (!this.viewer || this.viewer.isDestroyed()) {
-          if (!model.isDestroyed()) model.destroy();
-          return;
-        }
-        this.viewer.scene.primitives.add(model);
-        this.modelCache.set(meta.key, { model, meta });
-      })
-      .catch((err) => {
-        console.warn(`Failed to load 3D spacecraft model (${url}):`, err);
-      })
-      .finally(() => {
-        this.modelLoadPromises.delete(meta.key);
+    const loadSingleGlb = async (fileRelPath) => {
+      const url = `${MODELS_BASE_URL}${fileRelPath}`;
+      const model = await Cesium.Model.fromGltfAsync({
+        url,
+        modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(DEFAULT_ORBIT_POS),
+        scale: 1.0,
+        minimumPixelSize: 96,
+        maximumScale: 12000,
+        upAxis: Cesium.Axis.Y,
+        forwardAxis: Cesium.Axis.X,
+        lightColor: new Cesium.Cartesian3(2.8, 2.8, 2.8),
+        shadows: Cesium.ShadowMode.DISABLED,
+        show: false,
       });
+
+      if (!this.viewer || this.viewer.isDestroyed()) {
+        if (!model.isDestroyed()) model.destroy();
+        return null;
+      }
+
+      this.viewer.scene.primitives.add(model);
+      return {
+        model,
+        meta,
+        normalized: false,
+        localNormalizeMatrix: Cesium.Matrix4.IDENTITY,
+      };
+    };
+
+    const loadPromise = (async () => {
+      try {
+        const entry = await loadSingleGlb(meta.file);
+        if (entry) {
+          this.modelCache.set(meta.key, entry);
+        }
+      } catch (err) {
+        console.warn(`Primary 3D model failed (${meta.file}), falling back:`, err);
+        if (meta.fallbackFile) {
+          try {
+            const fallbackEntry = await loadSingleGlb(meta.fallbackFile);
+            if (fallbackEntry) {
+              this.modelCache.set(meta.key, fallbackEntry);
+            }
+          } catch (fallbackErr) {
+            console.warn(`Fallback 3D model failed (${meta.fallbackFile}):`, fallbackErr);
+          }
+        }
+      } finally {
+        this.modelLoadPromises.delete(meta.key);
+      }
+    })();
 
     this.modelLoadPromises.set(meta.key, loadPromise);
     await loadPromise;
@@ -826,9 +879,30 @@ export class CesiumSatelliteEngine {
     const shouldShow = this.closeupOrbitLocked || camDist < this.activeModelMeta.lodDistanceM;
 
     if (shouldShow) {
-      cached.model.modelMatrix = computeLvlhModelMatrix(satCartesian, pos.velEcfKmS);
+      const lvlh = computeLvlhModelMatrix(satCartesian, pos.velEcfKmS);
+
+      // On the very first frame the model finishes Draco/Meshopt decoding, compute exact local centering + scale
+      if (!cached.normalized && cached.model.ready) {
+        const bs = cached.model.boundingSphere;
+        const rawRadius = bs?.radius;
+        if (Number.isFinite(rawRadius) && rawRadius > 0.0001) {
+          const invCur = Cesium.Matrix4.inverse(cached.model.modelMatrix, new Cesium.Matrix4());
+          const localCenter = Cesium.Matrix4.multiplyByPoint(invCur, bs.center, new Cesium.Cartesian3());
+          const targetR = cached.meta.targetRadiusM || 28;
+          const s = targetR / rawRadius;
+          const negCenter = Cesium.Cartesian3.negate(localCenter, new Cesium.Cartesian3());
+          const tMat = Cesium.Matrix4.fromTranslation(negCenter, new Cesium.Matrix4());
+          const sMat = Cesium.Matrix4.fromUniformScale(s, new Cesium.Matrix4());
+          cached.localNormalizeMatrix = Cesium.Matrix4.multiply(sMat, tMat, new Cesium.Matrix4());
+        }
+        cached.normalized = true;
+      }
+
+      cached.model.modelMatrix = cached.normalized
+        ? Cesium.Matrix4.multiply(lvlh, cached.localNormalizeMatrix, new Cesium.Matrix4())
+        : lvlh;
       cached.model.show = true;
-      // Hide other cached archetype models
+
       for (const [k, entry] of this.modelCache.entries()) {
         if (k !== this.activeModelKey && entry.model && !entry.model.isDestroyed()) {
           entry.model.show = false;
@@ -838,12 +912,13 @@ export class CesiumSatelliteEngine {
       cached.model.show = false;
     }
 
-    if (this.is3dModelVisible !== shouldShow) {
-      this.is3dModelVisible = shouldShow;
-      this.onModelStateChange?.(shouldShow, this.activeModelMeta);
+    const isReadyAndVisible = shouldShow && cached.model.ready;
+    if (this.is3dModelVisible !== isReadyAndVisible) {
+      this.is3dModelVisible = isReadyAndVisible;
+      this.onModelStateChange?.(isReadyAndVisible, this.activeModelMeta);
     }
 
-    return shouldShow;
+    return isReadyAndVisible;
   }
 
   updateSelectedOverlays(pos, satCartesian, colorHex, selectedLook) {

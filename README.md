@@ -12,9 +12,11 @@
   1. **3D 지구본 (즉시 실행 · API 키 불필요)**: CesiumJS 3D 지구본 + Google 하이브리드/위성 타일 + 실시간 태양광(주/야간 경계선)
   2. **Google Photorealistic 3D Tiles**: Google Cloud **Map Tiles API** 키를 입력하면 실사 3D 건물·지형 지구본 위에 위성 궤도를 렌더링
   3. **Google Maps 3D 네이티브 (`<gmp-map-3d>`)**: Google **Maps JavaScript API (`maps3d`)** 기반 네이티브 3D 지도, `Marker3DInteractiveElement`, `Polyline3DElement` 지원
-- **줌인 시 실제 3D 위성 모델 표시 (거리 기반 LOD + 6종 PBR `.glb`)**
+- **줌인 시 실제 3D 위성 모델 표시 (3단계 실물·추정 하이브리드 + 거리 기반 LOD)**
   - 우주 전체 뷰에서는 60fps 발광 포인트로 표시하다가, 위성에 **줌인**하거나 우측 패널의 **`3D 근접 보기`** 버튼을 누르면 실제 3D 위성 모델로 자동 전환됩니다.
-  - 6종 경량 PBR `.glb` 모델(우주정거장형·광학 관측형·정지궤도 통신/기상형·항법 GNSS형·우주망원경형·스타링크 평판형)이 SGP4 속도·직하 방향 기반 **LVLH 비행 자세**로 실시간 회전하며, 드래그로 위성 주위를 360° 회전 감상할 수 있습니다.
+  - **1단계 · NASA 공식 실물 3D CAD (13종, Public Domain)**: ISS, 허블 우주망원경(HST), Terra, Aqua, Aura, Landsat 8/9, Suomi NPP / NOAA-20·21(JPSS), Chandra, TESS, CloudSat, CALIPSO, TDRS, Jason ([NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources))
+  - **2단계 · 공식 제원 기반 실제 형상 모델 (3종)**: 중국 톈궁(T자형 3모듈), 아리랑 5호(X-밴드 SAR 대형 평판 레이더), 천리안 2A/2B호·GOES-R(남측 외날개 태양전지판 + 북측 솔라세일 붐)
+  - **3단계 · 유형별 추정 모델링 (6종)**: 실물 CAD 데이터가 없는 나머지 모든 위성(아리랑 광학형, 무궁화, GPS/Galileo, 스타링크 등)에 자동 적용되며, 모든 모델은 SGP4 속도·직하 방향 기반 **LVLH 비행 자세**로 실시간 회전합니다.
 - **3D 궤도·가시권 분석 및 통과 예측**
   - 선택 위성의 과거/미래 3D 궤도 곡선, 직하선(Nadir Line), 지상 커버리지(Footprint) 표시
   - 지상 관측소(서울, 대전 KARI, 부산, 제주, 내 GPS 위치 등) 기준 **방위각(AZ), 고도각(EL), 직선거리(km), 시선(LOS) 빔** 및 **향후 24시간 상공 통과 예정 시각(AOS / 최대 고도각 / LOS)** 자동 계산

@@ -130,94 +130,342 @@ export function getSatelliteDisplayInfo(noradId, fallbackName) {
   };
 }
 
-const MODEL_SPECS = {
+/**
+ * 3-Tier 3D Spacecraft Model Catalog:
+ *   1. fidelity: 'nasa'      — Authentic NASA Public Domain 3D CAD (.glb)
+ *   2. fidelity: 'spec'      — Official spec-accurate real-shape modeling (Tiangong T-shape, KOMPSAT-5 SAR, GK-2A/2B single-wing + solar sail)
+ *   3. fidelity: 'estimated' — Archetype-based estimated PBR 3D modeling fallback
+ */
+const REAL_NASA_MODELS = {
+  nasa_iss: {
+    key: 'nasa_iss',
+    file: 'nasa/iss.glb',
+    fallbackFile: 'station.glb',
+    label: 'ISS 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 62,
+    closeupDistanceM: 340,
+    lodDistanceM: 3400000,
+  },
+  nasa_hubble: {
+    key: 'nasa_hubble',
+    file: 'nasa/hubble.glb',
+    fallbackFile: 'telescope.glb',
+    label: '허블 망원경 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 28,
+    closeupDistanceM: 170,
+    lodDistanceM: 3000000,
+  },
+  nasa_terra: {
+    key: 'nasa_terra',
+    file: 'nasa/terra.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'Terra 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 28,
+    closeupDistanceM: 170,
+    lodDistanceM: 3000000,
+  },
+  nasa_aqua: {
+    key: 'nasa_aqua',
+    file: 'nasa/aqua.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'Aqua 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 28,
+    closeupDistanceM: 170,
+    lodDistanceM: 3000000,
+  },
+  nasa_aura: {
+    key: 'nasa_aura',
+    file: 'nasa/aura.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'Aura 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 28,
+    closeupDistanceM: 170,
+    lodDistanceM: 3000000,
+  },
+  nasa_landsat8: {
+    key: 'nasa_landsat8',
+    file: 'nasa/landsat8.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'Landsat 8/9 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 26,
+    closeupDistanceM: 165,
+    lodDistanceM: 3000000,
+  },
+  nasa_suomi_npp: {
+    key: 'nasa_suomi_npp',
+    file: 'nasa/suomi_npp.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'JPSS / Suomi NPP 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 26,
+    closeupDistanceM: 165,
+    lodDistanceM: 3000000,
+  },
+  nasa_chandra: {
+    key: 'nasa_chandra',
+    file: 'nasa/chandra.glb',
+    fallbackFile: 'telescope.glb',
+    label: 'Chandra 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 32,
+    closeupDistanceM: 195,
+    lodDistanceM: 8000000,
+  },
+  nasa_tess: {
+    key: 'nasa_tess',
+    file: 'nasa/tess.glb',
+    fallbackFile: 'telescope.glb',
+    label: 'TESS 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 24,
+    closeupDistanceM: 155,
+    lodDistanceM: 8000000,
+  },
+  nasa_cloudsat: {
+    key: 'nasa_cloudsat',
+    file: 'nasa/cloudsat.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'CloudSat 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 24,
+    closeupDistanceM: 155,
+    lodDistanceM: 2800000,
+  },
+  nasa_calipso: {
+    key: 'nasa_calipso',
+    file: 'nasa/calipso.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'CALIPSO 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 24,
+    closeupDistanceM: 155,
+    lodDistanceM: 2800000,
+  },
+  nasa_tdrs: {
+    key: 'nasa_tdrs',
+    file: 'nasa/tdrs.glb',
+    fallbackFile: 'geo_comm.glb',
+    label: 'TDRS 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 34,
+    closeupDistanceM: 220,
+    lodDistanceM: 18000000,
+  },
+  nasa_jason: {
+    key: 'nasa_jason',
+    file: 'nasa/jason.glb',
+    fallbackFile: 'earth_obs.glb',
+    label: 'Jason 실물 CAD',
+    fidelity: 'nasa',
+    fidelityLabel: 'NASA 실제 모델',
+    targetRadiusM: 24,
+    closeupDistanceM: 155,
+    lodDistanceM: 3200000,
+  },
+};
+
+const SPEC_MODELS = {
+  tiangong: {
+    key: 'tiangong',
+    file: 'tiangong.glb',
+    label: '톈궁 T자형 3모듈',
+    fidelity: 'spec',
+    fidelityLabel: '공식 제원 형상',
+    targetRadiusM: 52,
+    closeupDistanceM: 310,
+    lodDistanceM: 3200000,
+  },
+  kompsat_sar: {
+    key: 'kompsat_sar',
+    file: 'kompsat_sar.glb',
+    label: '아리랑 5호 SAR 형상',
+    fidelity: 'spec',
+    fidelityLabel: '공식 제원 형상',
+    targetRadiusM: 24,
+    closeupDistanceM: 155,
+    lodDistanceM: 2800000,
+  },
+  gk2_weather: {
+    key: 'gk2_weather',
+    file: 'gk2_weather.glb',
+    label: '외날개 + 솔라세일 기상형',
+    fidelity: 'spec',
+    fidelityLabel: '공식 제원 형상',
+    targetRadiusM: 34,
+    closeupDistanceM: 220,
+    lodDistanceM: 18000000,
+  },
+};
+
+const ESTIMATED_MODELS = {
   station: {
     key: 'station',
     file: 'station.glb',
-    label: '우주정거장형 3D',
-    scale: 2.2, // ~100m span
-    closeupDistanceM: 420,
+    label: '우주정거장형',
+    fidelity: 'estimated',
+    fidelityLabel: '추정 모델링',
+    targetRadiusM: 54,
+    closeupDistanceM: 330,
     lodDistanceM: 3200000,
   },
   earth_obs: {
     key: 'earth_obs',
     file: 'earth_obs.glb',
-    label: '광학·관측형 3D',
-    scale: 2.0,
-    closeupDistanceM: 180,
+    label: '광학·관측형',
+    fidelity: 'estimated',
+    fidelityLabel: '추정 모델링',
+    targetRadiusM: 24,
+    closeupDistanceM: 155,
     lodDistanceM: 2800000,
   },
   geo_comm: {
     key: 'geo_comm',
     file: 'geo_comm.glb',
-    label: '정지궤도 통신·기상형 3D',
-    scale: 2.4,
-    closeupDistanceM: 260,
+    label: '정지궤도 통신형',
+    fidelity: 'estimated',
+    fidelityLabel: '추정 모델링',
+    targetRadiusM: 34,
+    closeupDistanceM: 220,
     lodDistanceM: 18000000,
   },
   gnss: {
     key: 'gnss',
     file: 'gnss.glb',
-    label: '항법(GNSS)형 3D',
-    scale: 2.1,
-    closeupDistanceM: 200,
+    label: '항법(GNSS)형',
+    fidelity: 'estimated',
+    fidelityLabel: '추정 모델링',
+    targetRadiusM: 26,
+    closeupDistanceM: 170,
     lodDistanceM: 12000000,
   },
   telescope: {
     key: 'telescope',
     file: 'telescope.glb',
-    label: '우주망원경형 3D',
-    scale: 2.1,
-    closeupDistanceM: 210,
+    label: '우주망원경형',
+    fidelity: 'estimated',
+    fidelityLabel: '추정 모델링',
+    targetRadiusM: 26,
+    closeupDistanceM: 170,
     lodDistanceM: 3000000,
   },
   starlink: {
     key: 'starlink',
     file: 'starlink.glb',
-    label: '평판 군집형 3D',
-    scale: 2.0,
-    closeupDistanceM: 130,
+    label: '스타링크 평판형',
+    fidelity: 'estimated',
+    fidelityLabel: '추정 모델링',
+    targetRadiusM: 18,
+    closeupDistanceM: 120,
     lodDistanceM: 2400000,
   },
 };
 
 export function getSatelliteModelMeta(record) {
-  if (!record) return MODEL_SPECS.earth_obs;
+  if (!record) return ESTIMATED_MODELS.earth_obs;
   const name = String(record.name || '').toUpperCase();
   const group = record.group || '';
   const id = Number(record.id);
 
+  // Tier 1: Authentic NASA Public Domain 3D CAD models
+  if (id === 25544 || id === 49044 || id === 36086 || name.includes('ISS') || name.includes('ZARYA')) {
+    return REAL_NASA_MODELS.nasa_iss;
+  }
+  if (id === 20580 || name === 'HST' || name.includes('HUBBLE')) {
+    return REAL_NASA_MODELS.nasa_hubble;
+  }
+  if (id === 25994 || name === 'TERRA' || name.startsWith('TERRA ')) {
+    return REAL_NASA_MODELS.nasa_terra;
+  }
+  if (id === 27424 || name === 'AQUA' || name.startsWith('AQUA ')) {
+    return REAL_NASA_MODELS.nasa_aqua;
+  }
+  if (id === 28376 || name === 'AURA' || name.startsWith('AURA ')) {
+    return REAL_NASA_MODELS.nasa_aura;
+  }
+  if (id === 39084 || id === 49260 || name.includes('LANDSAT 8') || name.includes('LANDSAT 9')) {
+    return REAL_NASA_MODELS.nasa_landsat8;
+  }
   if (
-    id === 25544 ||
+    id === 37849 ||
+    id === 43013 ||
+    id === 54234 ||
+    name.includes('SUOMI NPP') ||
+    name.includes('NOAA 20') ||
+    name.includes('NOAA-20') ||
+    name.includes('NOAA 21') ||
+    name.includes('NOAA-21') ||
+    name.includes('JPSS')
+  ) {
+    return REAL_NASA_MODELS.nasa_suomi_npp;
+  }
+  if (id === 25867 || name.includes('CHANDRA')) {
+    return REAL_NASA_MODELS.nasa_chandra;
+  }
+  if (id === 43435 || name === 'TESS' || name.startsWith('TESS ')) {
+    return REAL_NASA_MODELS.nasa_tess;
+  }
+  if (id === 29107 || name.includes('CLOUDSAT')) {
+    return REAL_NASA_MODELS.nasa_cloudsat;
+  }
+  if (id === 29108 || name.includes('CALIPSO')) {
+    return REAL_NASA_MODELS.nasa_calipso;
+  }
+  if (name.includes('TDRS')) {
+    return REAL_NASA_MODELS.nasa_tdrs;
+  }
+  if (name.includes('JASON')) {
+    return REAL_NASA_MODELS.nasa_jason;
+  }
+
+  // Tier 2: Spec-accurate real-shape modeling (Tiangong, KOMPSAT-5 SAR, GK-2A/2B, GOES-R)
+  if (
     id === 48274 ||
-    group === 'stations' ||
-    name.includes('ISS') ||
+    id === 53239 ||
+    id === 54216 ||
     name.includes('CSS') ||
     name.includes('TIANHE') ||
-    name.includes('ZARYA') ||
-    name.includes('NAUKA') ||
-    name.includes('POISK')
+    name.includes('WENTIAN') ||
+    name.includes('MENGTIAN')
   ) {
-    return MODEL_SPECS.station;
+    return SPEC_MODELS.tiangong;
   }
-
+  if (id === 39227 || name.includes('KOMPSAT-5') || name.includes('ARIRANG-5')) {
+    return SPEC_MODELS.kompsat_sar;
+  }
   if (
-    id === 20580 ||
-    name.includes('HST') ||
-    name.includes('HUBBLE') ||
-    name.includes('CHANDRA') ||
-    name.includes('FERMI') ||
-    name.includes('TESS') ||
-    name.includes('XMM') ||
-    group === 'science'
+    id === 43823 ||
+    id === 45246 ||
+    name.includes('GEO-KOMPSAT-2') ||
+    name.includes('GOES 16') ||
+    name.includes('GOES 17') ||
+    name.includes('GOES 18') ||
+    name.includes('GOES 19') ||
+    name.includes('HIMAWARI')
   ) {
-    return MODEL_SPECS.telescope;
+    return SPEC_MODELS.gk2_weather;
   }
 
-  if (group === 'starlink' || name.includes('STARLINK')) {
-    return MODEL_SPECS.starlink;
-  }
-
+  // Tier 3: Estimated PBR 3D archetype modeling fallback
+  if (group === 'stations') return ESTIMATED_MODELS.station;
+  if (group === 'starlink' || name.includes('STARLINK')) return ESTIMATED_MODELS.starlink;
   if (
     group === 'gps' ||
     name.includes('GPS') ||
@@ -226,20 +474,12 @@ export function getSatelliteModelMeta(record) {
     name.includes('GLONASS') ||
     name.includes('BEIDOU')
   ) {
-    return MODEL_SPECS.gnss;
+    return ESTIMATED_MODELS.gnss;
   }
-
-  if (
-    record.regime === 'GEO' ||
-    name.includes('GEO-KOMPSAT') ||
-    name.includes('KOREASAT') ||
-    name.includes('GOES') ||
-    name.includes('HIMAWARI') ||
-    name.includes('METEOSAT')
-  ) {
-    return MODEL_SPECS.geo_comm;
+  if (group === 'science') return ESTIMATED_MODELS.telescope;
+  if (record.regime === 'GEO' || name.includes('KOREASAT')) {
+    return ESTIMATED_MODELS.geo_comm;
   }
-
-  return MODEL_SPECS.earth_obs;
+  return ESTIMATED_MODELS.earth_obs;
 }
 
