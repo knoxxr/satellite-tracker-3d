@@ -24,6 +24,8 @@ const MIME_TYPES = {
   '.xml': 'application/xml',
   '.czml': 'application/json',
   '.woff2': 'font/woff2',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
 };
 
 function sendJson(res, status, payload) {

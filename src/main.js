@@ -61,6 +61,9 @@ class OrbitPulseApp {
         this.state.hoveredScreenPos = screenPos;
         this.updateHoverTooltip();
       },
+      onModelStateChange: (is3dVisible) => {
+        this.hud.set3dModelActiveState(is3dVisible);
+      },
     });
 
     this.gmapsEngine = new GoogleMaps3DEngine(this.gmapsContainer, {
@@ -77,6 +80,7 @@ class OrbitPulseApp {
       onRefreshData: () => this.loadCategory(this.state.category, true),
       onSelectSatellite: (id, flyTo) => this.selectSatellite(id, flyTo),
       onDeselectSatellite: () => this.selectSatellite(null, false),
+      onCloseupSelected: () => this.closeupSelected(),
       onToggleFollow: () => this.toggleFollow(),
       onFlyToSelected: () => this.flyToSelected(),
       onEngineChange: (eng) => this.switchEngine(eng),
@@ -239,6 +243,18 @@ class OrbitPulseApp {
       if (pos) this.getActiveEngineInstance().flyToSatellite(pos, 0.9);
       this.hud.toast('선택된 위성에 카메라를 고정했습니다.', 'info');
     }
+  }
+
+  async closeupSelected() {
+    if (!this.state.selectedId) return;
+    const rec = this.getAllRecords().find((r) => r.id === this.state.selectedId);
+    const pos = this.positionsMap.get(this.state.selectedId);
+    if (!rec || !pos) return;
+
+    this.state.followMode = true;
+    this.hud.setFollowState(true);
+    await this.getActiveEngineInstance().flyToCloseup(pos, rec);
+    this.hud.toast('3D 위성 근접 보기 활성화 — 드래그로 360° 회전, 스크롤로 줌 조절할 수 있습니다.', 'info');
   }
 
   flyToSelected() {

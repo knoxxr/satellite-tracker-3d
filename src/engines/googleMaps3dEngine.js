@@ -286,6 +286,22 @@ export class GoogleMaps3DEngine {
     }
   }
 
+  flyToCloseup(pos) {
+    if (!this.map3d || !pos) return;
+    const alt = Math.min(pos.altMeters, 55000000);
+    if (typeof this.map3d.flyCameraTo === 'function') {
+      this.map3d.flyCameraTo({
+        endCamera: {
+          center: { lat: pos.lat, lng: pos.lon, altitude: alt },
+          tilt: 60,
+          heading: 35,
+          range: 35000,
+        },
+        durationMillis: 1200,
+      });
+    }
+  }
+
   resetView() {
     if (!this.map3d) return;
     if (typeof this.map3d.flyCameraTo === 'function') {

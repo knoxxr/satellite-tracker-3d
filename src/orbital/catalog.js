@@ -129,3 +129,117 @@ export function getSatelliteDisplayInfo(noradId, fallbackName) {
     isNotable: Boolean(meta),
   };
 }
+
+const MODEL_SPECS = {
+  station: {
+    key: 'station',
+    file: 'station.glb',
+    label: '우주정거장형 3D',
+    scale: 2.2, // ~100m span
+    closeupDistanceM: 420,
+    lodDistanceM: 3200000,
+  },
+  earth_obs: {
+    key: 'earth_obs',
+    file: 'earth_obs.glb',
+    label: '광학·관측형 3D',
+    scale: 2.0,
+    closeupDistanceM: 180,
+    lodDistanceM: 2800000,
+  },
+  geo_comm: {
+    key: 'geo_comm',
+    file: 'geo_comm.glb',
+    label: '정지궤도 통신·기상형 3D',
+    scale: 2.4,
+    closeupDistanceM: 260,
+    lodDistanceM: 18000000,
+  },
+  gnss: {
+    key: 'gnss',
+    file: 'gnss.glb',
+    label: '항법(GNSS)형 3D',
+    scale: 2.1,
+    closeupDistanceM: 200,
+    lodDistanceM: 12000000,
+  },
+  telescope: {
+    key: 'telescope',
+    file: 'telescope.glb',
+    label: '우주망원경형 3D',
+    scale: 2.1,
+    closeupDistanceM: 210,
+    lodDistanceM: 3000000,
+  },
+  starlink: {
+    key: 'starlink',
+    file: 'starlink.glb',
+    label: '평판 군집형 3D',
+    scale: 2.0,
+    closeupDistanceM: 130,
+    lodDistanceM: 2400000,
+  },
+};
+
+export function getSatelliteModelMeta(record) {
+  if (!record) return MODEL_SPECS.earth_obs;
+  const name = String(record.name || '').toUpperCase();
+  const group = record.group || '';
+  const id = Number(record.id);
+
+  if (
+    id === 25544 ||
+    id === 48274 ||
+    group === 'stations' ||
+    name.includes('ISS') ||
+    name.includes('CSS') ||
+    name.includes('TIANHE') ||
+    name.includes('ZARYA') ||
+    name.includes('NAUKA') ||
+    name.includes('POISK')
+  ) {
+    return MODEL_SPECS.station;
+  }
+
+  if (
+    id === 20580 ||
+    name.includes('HST') ||
+    name.includes('HUBBLE') ||
+    name.includes('CHANDRA') ||
+    name.includes('FERMI') ||
+    name.includes('TESS') ||
+    name.includes('XMM') ||
+    group === 'science'
+  ) {
+    return MODEL_SPECS.telescope;
+  }
+
+  if (group === 'starlink' || name.includes('STARLINK')) {
+    return MODEL_SPECS.starlink;
+  }
+
+  if (
+    group === 'gps' ||
+    name.includes('GPS') ||
+    name.includes('NAVSTAR') ||
+    name.includes('GALILEO') ||
+    name.includes('GLONASS') ||
+    name.includes('BEIDOU')
+  ) {
+    return MODEL_SPECS.gnss;
+  }
+
+  if (
+    record.regime === 'GEO' ||
+    name.includes('GEO-KOMPSAT') ||
+    name.includes('KOREASAT') ||
+    name.includes('GOES') ||
+    name.includes('HIMAWARI') ||
+    name.includes('METEOSAT')
+  ) {
+    return MODEL_SPECS.geo_comm;
+  }
+
+  return MODEL_SPECS.earth_obs;
+}
+

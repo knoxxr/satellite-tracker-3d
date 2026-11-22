@@ -1,8 +1,14 @@
 import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
-import { getCategoryColor, getSatelliteDisplayInfo } from '../orbital/catalog.js';
+import {
+  getCategoryColor,
+  getSatelliteDisplayInfo,
+  getSatelliteModelMeta,
+} from '../orbital/catalog.js';
 
-const CESIUM_ASSETS_URL = `${import.meta.env.BASE_URL || '/'}cesium/`;
+const BASE_URL = import.meta.env.BASE_URL || '/';
+const CESIUM_ASSETS_URL = `${BASE_URL}cesium/`;
+const MODELS_BASE_URL = `${BASE_URL}models/`;
 if (typeof window !== 'undefined') {
   window.CESIUM_BASE_URL = CESIUM_ASSETS_URL;
 }
@@ -156,11 +162,65 @@ function createSatelliteSprite(hexColor, selected = false) {
   return canvas.toDataURL();
 }
 
+/**
+ * Build a right-handed 4x4 LVLH (Local Vertical Local Horizontal) ECEF modelMatrix:
+ *   +X = Orbital forward velocity (tangent to orbit; falls back to East for GEO)
+ *   +Y = Orbital normal (left / port)
+ *   +Z = Zenith (radial away from Earth -> maps to glTF +Y; so glTF -Y points Nadir at Earth!)
+ */
+function computeLvlhModelMatrix(satCartesian, velEcfKmS) {
+  const up = Cesium.Cartesian3.normalize(satCartesian, new Cesium.Cartesian3());
+  let forward = null;
+
+  if (velEcfKmS) {
+    const rawVel = new Cesium.Cartesian3(velEcfKmS.x, velEcfKmS.y, velEcfKmS.z);
+    const radialComponent = Cesium.Cartesian3.dot(rawVel, up);
+    const tangent = Cesium.Cartesian3.subtract(
+      rawVel,
+      Cesium.Cartesian3.multiplyByScalar(up, radialComponent, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+    if (Cesium.Cartesian3.magnitude(tangent) > 1e-4) {
+      forward = Cesium.Cartesian3.normalize(tangent, tangent);
+    }
+  }
+
+  // Fallback for geostationary satellites whose ECEF velocity is near zero: align forward to local East
+  if (!forward) {
+    const east = Cesium.Cartesian3.cross(Cesium.Cartesian3.UNIT_Z, up, new Cesium.Cartesian3());
+    if (Cesium.Cartesian3.magnitude(east) > 1e-4) {
+      forward = Cesium.Cartesian3.normalize(east, east);
+    } else {
+      forward = Cesium.Cartesian3.clone(Cesium.Cartesian3.UNIT_X);
+    }
+  }
+
+  const left = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(up, forward, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+
+  // Re-orthogonalize forward = left x up
+  Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(left, up, forward),
+    forward
+  );
+
+  const rot = new Cesium.Matrix3(
+    forward.x, left.x, up.x,
+    forward.y, left.y, up.y,
+    forward.z, left.z, up.z
+  );
+
+  return Cesium.Matrix4.fromRotationTranslation(rot, satCartesian, new Cesium.Matrix4());
+}
+
 export class CesiumSatelliteEngine {
-  constructor(container, { onSelect, onHover }) {
+  constructor(container, { onSelect, onHover, onModelStateChange }) {
     this.container = container;
     this.onSelect = onSelect;
     this.onHover = onHover;
+    this.onModelStateChange = onModelStateChange;
     this.viewer = null;
     this.billboards = null;
     this.labels = null;
@@ -170,6 +230,12 @@ export class CesiumSatelliteEngine {
 
     this.spriteCache = new Map();
     this.satPrimitives = new Map(); // id -> { billboard, label, record, color, defaultShowLabel }
+    this.modelCache = new Map(); // archetypeKey -> { model, meta }
+    this.modelLoadPromises = new Map(); // archetypeKey -> Promise
+    this.activeModelKey = null;
+    this.activeModelMeta = null;
+    this.is3dModelVisible = false;
+    this.closeupOrbitLocked = false;
     this.googleTileset = null;
     this.google3dEnabled = false;
     this.currentBasemap = 'google-hybrid';
@@ -511,11 +577,16 @@ export class CesiumSatelliteEngine {
       prev.label.distanceDisplayCondition = new Cesium.DistanceDisplayCondition(0, 32000000);
     }
 
+    this.releaseCloseupCameraLock();
+    this.hideAll3dModels();
+
     this.selectedId = satId;
     this.lastFollowTarget = null;
     this.lastOverlayColor = '';
 
     if (!satId) {
+      this.activeModelKey = null;
+      this.activeModelMeta = null;
       this.clearSelectionOverlays();
       return;
     }
@@ -527,7 +598,74 @@ export class CesiumSatelliteEngine {
       next.label.show = next.billboard.show;
       next.label.font = '700 12px Inter, "Noto Sans KR", sans-serif';
       next.label.distanceDisplayCondition = undefined;
+      this.ensureSelectedModel(next.record);
     }
+  }
+
+  hideAll3dModels() {
+    for (const entry of this.modelCache.values()) {
+      if (entry.model && !entry.model.isDestroyed()) {
+        entry.model.show = false;
+      }
+    }
+    if (this.is3dModelVisible) {
+      this.is3dModelVisible = false;
+      this.onModelStateChange?.(false, null);
+    }
+  }
+
+  async ensureSelectedModel(record) {
+    if (!this.viewer || !record) return;
+    const meta = getSatelliteModelMeta(record);
+    this.activeModelKey = meta.key;
+    this.activeModelMeta = meta;
+
+    if (this.modelCache.has(meta.key)) {
+      return;
+    }
+
+    if (this.modelLoadPromises.has(meta.key)) {
+      await this.modelLoadPromises.get(meta.key);
+      return;
+    }
+
+    const url = `${MODELS_BASE_URL}${meta.file}`;
+    const loadPromise = Cesium.Model.fromGltfAsync({
+      url,
+      modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(DEFAULT_ORBIT_POS),
+      scale: meta.scale,
+      minimumPixelSize: 92,
+      maximumScale: 6500,
+      upAxis: Cesium.Axis.Y,
+      forwardAxis: Cesium.Axis.X,
+      lightColor: new Cesium.Cartesian3(2.5, 2.5, 2.5),
+      shadows: Cesium.ShadowMode.DISABLED,
+      show: false,
+    })
+      .then((model) => {
+        if (!this.viewer || this.viewer.isDestroyed()) {
+          if (!model.isDestroyed()) model.destroy();
+          return;
+        }
+        this.viewer.scene.primitives.add(model);
+        this.modelCache.set(meta.key, { model, meta });
+      })
+      .catch((err) => {
+        console.warn(`Failed to load 3D spacecraft model (${url}):`, err);
+      })
+      .finally(() => {
+        this.modelLoadPromises.delete(meta.key);
+      });
+
+    this.modelLoadPromises.set(meta.key, loadPromise);
+    await loadPromise;
+  }
+
+  releaseCloseupCameraLock() {
+    if (this.closeupOrbitLocked && this.viewer && !this.viewer.isDestroyed()) {
+      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    }
+    this.closeupOrbitLocked = false;
   }
 
   setHovered(satId) {
@@ -545,6 +683,7 @@ export class CesiumSatelliteEngine {
   }
 
   clearSelectionOverlays() {
+    this.hideAll3dModels();
     if (this.pastOrbitLine) this.pastOrbitLine.show = false;
     if (this.futureOrbitLine) this.futureOrbitLine.show = false;
     if (this.nadirLine) this.nadirLine.show = false;
@@ -573,6 +712,9 @@ export class CesiumSatelliteEngine {
   setFollowMode(enabled) {
     this.followMode = enabled;
     this.lastFollowTarget = null;
+    if (!enabled) {
+      this.releaseCloseupCameraLock();
+    }
   }
 
   updateOrbitTrack(track, colorHex) {
@@ -609,6 +751,7 @@ export class CesiumSatelliteEngine {
     if (!this.viewer) return;
 
     this.viewer.clock.currentTime = Cesium.JulianDate.fromDate(simDate);
+    const cameraPosWC = this.viewer.camera.positionWC;
 
     for (const [id, entry] of this.satPrimitives.entries()) {
       const pos = positionsMap.get(id);
@@ -619,34 +762,88 @@ export class CesiumSatelliteEngine {
         continue;
       }
 
-      entry.billboard.show = true;
       entry.billboard.position = cartesian;
       entry.label.position = cartesian;
-      entry.label.show =
-        id === this.selectedId || id === this.hoveredId || entry.defaultShowLabel;
 
       if (id === this.selectedId) {
-        this.lastSelectedPosition = { pos, cartesian };
+        this.lastSelectedPosition = { pos, cartesian, record: entry.record };
         this.updateSelectedOverlays(pos, cartesian, entry.color, selectedLook);
+        const showing3d = this.updateSelected3dModel(pos, cartesian, cameraPosWC);
+        entry.billboard.show = !showing3d;
+        entry.label.show = !this.closeupOrbitLocked;
+      } else {
+        entry.billboard.show = true;
+        entry.label.show = id === this.hoveredId || entry.defaultShowLabel;
       }
     }
 
-    if (this.followMode && this.selectedId && this.lastSelectedPosition) {
+    if (this.selectedId && this.lastSelectedPosition) {
       const currentTarget = this.lastSelectedPosition.cartesian;
-      if (this.lastFollowTarget) {
-        const delta = Cesium.Cartesian3.subtract(
-          currentTarget,
-          this.lastFollowTarget,
-          new Cesium.Cartesian3()
-        );
-        this.viewer.camera.position = Cesium.Cartesian3.add(
-          this.viewer.camera.position,
-          delta,
-          new Cesium.Cartesian3()
-        );
+      if (this.closeupOrbitLocked) {
+        // Keep local 360-degree camera orbit centered on the moving spacecraft
+        const cam = this.viewer.camera;
+        const localPos = Cesium.Cartesian3.clone(cam.position);
+        const localDir = Cesium.Cartesian3.clone(cam.direction);
+        const localUp = Cesium.Cartesian3.clone(cam.up);
+        const localRight = Cesium.Cartesian3.clone(cam.right);
+
+        const localDist = Cesium.Cartesian3.magnitude(localPos);
+        const releaseLimit = (this.activeModelMeta?.lodDistanceM || 3200000) * 1.4;
+        if (localDist > releaseLimit) {
+          this.releaseCloseupCameraLock();
+        } else {
+          const nextTransform = Cesium.Transforms.eastNorthUpToFixedFrame(currentTarget);
+          cam.lookAtTransform(nextTransform);
+          cam.position = localPos;
+          cam.direction = localDir;
+          cam.up = localUp;
+          cam.right = localRight;
+        }
+      } else if (this.followMode) {
+        if (this.lastFollowTarget) {
+          const delta = Cesium.Cartesian3.subtract(
+            currentTarget,
+            this.lastFollowTarget,
+            new Cesium.Cartesian3()
+          );
+          this.viewer.camera.position = Cesium.Cartesian3.add(
+            this.viewer.camera.position,
+            delta,
+            new Cesium.Cartesian3()
+          );
+        }
+        this.lastFollowTarget = Cesium.Cartesian3.clone(currentTarget);
       }
-      this.lastFollowTarget = Cesium.Cartesian3.clone(currentTarget);
     }
+  }
+
+  updateSelected3dModel(pos, satCartesian, cameraPosWC) {
+    if (!this.activeModelKey || !this.activeModelMeta) return false;
+    const cached = this.modelCache.get(this.activeModelKey);
+    if (!cached || !cached.model || cached.model.isDestroyed()) return false;
+
+    const camDist = Cesium.Cartesian3.distance(cameraPosWC, satCartesian);
+    const shouldShow = this.closeupOrbitLocked || camDist < this.activeModelMeta.lodDistanceM;
+
+    if (shouldShow) {
+      cached.model.modelMatrix = computeLvlhModelMatrix(satCartesian, pos.velEcfKmS);
+      cached.model.show = true;
+      // Hide other cached archetype models
+      for (const [k, entry] of this.modelCache.entries()) {
+        if (k !== this.activeModelKey && entry.model && !entry.model.isDestroyed()) {
+          entry.model.show = false;
+        }
+      }
+    } else {
+      cached.model.show = false;
+    }
+
+    if (this.is3dModelVisible !== shouldShow) {
+      this.is3dModelVisible = shouldShow;
+      this.onModelStateChange?.(shouldShow, this.activeModelMeta);
+    }
+
+    return shouldShow;
   }
 
   updateSelectedOverlays(pos, satCartesian, colorHex, selectedLook) {
@@ -698,6 +895,7 @@ export class CesiumSatelliteEngine {
 
   flyToSatellite(pos, duration = 1.4) {
     if (!this.viewer || !pos) return;
+    this.releaseCloseupCameraLock();
     const viewAltitude = Math.min(Math.max(pos.altMeters * 4.5, 4200000), 65000000);
     const dest = safeCartesianFromDegrees(pos.lon, pos.lat, viewAltitude);
     if (!dest) return;
@@ -708,8 +906,36 @@ export class CesiumSatelliteEngine {
     });
   }
 
+  /**
+   * Fly right alongside the selected satellite to inspect its real-time 3D PBR spacecraft model
+   * against the curved 3D Earth, locking 360-degree camera orbit around the spacecraft.
+   */
+  async flyToCloseup(pos, record) {
+    if (!this.viewer || !pos || !record) return;
+    const satCartesian = safeCartesianFromDegrees(pos.lon, pos.lat, pos.altMeters);
+    if (!satCartesian) return;
+
+    await this.ensureSelectedModel(record);
+    const meta = getSatelliteModelMeta(record);
+
+    const transform = Cesium.Transforms.eastNorthUpToFixedFrame(satCartesian);
+    const range = meta.closeupDistanceM || 260;
+    const heading = Cesium.Math.toRadians(38);
+    const pitch = Cesium.Math.toRadians(-24);
+
+    this.closeupOrbitLocked = true;
+    this.followMode = true;
+    this.lastFollowTarget = Cesium.Cartesian3.clone(satCartesian);
+
+    this.viewer.camera.lookAtTransform(
+      transform,
+      new Cesium.HeadingPitchRange(heading, pitch, range)
+    );
+  }
+
   flyToObserver(observer, duration = 1.2) {
     if (!this.viewer || !observer) return;
+    this.releaseCloseupCameraLock();
     const dest = safeCartesianFromDegrees(observer.lon, observer.lat, 3800000);
     if (!dest) return;
     this.viewer.camera.flyTo({
@@ -720,6 +946,7 @@ export class CesiumSatelliteEngine {
 
   resetView() {
     if (!this.viewer) return;
+    this.releaseCloseupCameraLock();
     this.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(127.0, 32.0, 15500000),
       duration: 1.2,
@@ -736,6 +963,7 @@ export class CesiumSatelliteEngine {
   }
 
   destroy() {
+    this.releaseCloseupCameraLock();
     if (this.eventHandler) {
       this.eventHandler.destroy();
       this.eventHandler = null;

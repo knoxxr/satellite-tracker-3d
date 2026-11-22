@@ -144,6 +144,19 @@ export function propagateSatellite(record, date) {
   const centralAngleRad = Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + clampedAlt));
   const footprintRadiusKm = EARTH_RADIUS_KM * centralAngleRad;
 
+  // ECEF velocity vector (km/s) for realistic LVLH 3D spacecraft flight orientation
+  let velEcfKmS = null;
+  if (velEci && typeof velEci !== 'boolean') {
+    const posEcf = satellite.eciToEcf(posEci, gmst);
+    const velRot = satellite.eciToEcf(velEci, gmst);
+    const OMEGA_EARTH = 7.292115e-5; // rad/s
+    velEcfKmS = {
+      x: velRot.x + OMEGA_EARTH * posEcf.y,
+      y: velRot.y - OMEGA_EARTH * posEcf.x,
+      z: velRot.z,
+    };
+  }
+
   return {
     lat,
     lon,
@@ -154,6 +167,7 @@ export function propagateSatellite(record, date) {
     footprintRadiusKm,
     footprintRadiusMeters: footprintRadiusKm * 1000,
     posEci,
+    velEcfKmS,
     gmst,
   };
 }

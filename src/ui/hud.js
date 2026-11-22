@@ -4,6 +4,7 @@ import {
   getCategoryColor,
   getGroupLabel,
   getSatelliteDisplayInfo,
+  getSatelliteModelMeta,
 } from '../orbital/catalog.js';
 import { ICONS } from './icons.js';
 
@@ -91,6 +92,9 @@ export class HudController {
       telName: $('tel-name'),
       telOriginalName: $('tel-original-name'),
       telSummary: $('tel-summary'),
+      telModelType: $('tel-model-type'),
+      telModelLod: $('tel-model-lod'),
+      btnCloseup: $('btn-closeup'),
       btnFollow: $('btn-follow'),
       btnFlyto: $('btn-flyto'),
       telLat: $('tel-lat'),
@@ -142,6 +146,7 @@ export class HudController {
     setIcon('layers-icon', ICONS.layers);
     setIcon('plus-icon', ICONS.plus);
     setIcon('key-icon', ICONS.key);
+    setIcon('closeup-icon', ICONS.cube3d);
     setIcon('follow-icon', ICONS.crosshair);
     setIcon('flyto-icon', ICONS.orbit);
     setIcon('expand-icon', ICONS.chevronRight);
@@ -261,6 +266,9 @@ export class HudController {
     this.el.btnCloseTelemetry.addEventListener('click', () => {
       this.cb.onDeselectSatellite?.();
     });
+    this.el.btnCloseup.addEventListener('click', () => {
+      this.cb.onCloseupSelected?.();
+    });
     this.el.btnFollow.addEventListener('click', () => {
       this.cb.onToggleFollow?.();
     });
@@ -379,7 +387,13 @@ export class HudController {
 
   setFollowState(following) {
     this.el.btnFollow.classList.toggle('active', following);
-    this.el.btnFollow.querySelector('span:last-child').textContent = following ? '추적 중 (고정)' : '카메라 추적';
+    this.el.btnFollow.querySelector('span:last-child').textContent = following ? '추적 중' : '카메라 추적';
+  }
+
+  set3dModelActiveState(is3dActive) {
+    if (!this.el.telModelLod) return;
+    this.el.telModelLod.classList.toggle('active-3d', is3dActive);
+    this.el.telModelLod.textContent = is3dActive ? '3D 실물 표시 중' : '줌인 시 3D 실물 표시';
   }
 
   setSyncStatus(text) {
@@ -471,6 +485,11 @@ export class HudController {
       this.el.telSummary.textContent = info.summary;
     } else {
       this.el.telSummary.hidden = true;
+    }
+
+    const modelMeta = getSatelliteModelMeta(record);
+    if (this.el.telModelType) {
+      this.el.telModelType.textContent = modelMeta.label;
     }
 
     this.el.telLat.textContent = fmtCoord(pos.lat, 'N', 'S');

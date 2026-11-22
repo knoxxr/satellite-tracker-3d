@@ -151,14 +151,23 @@
 
       <p id="tel-summary" class="telemetry-summary" hidden></p>
 
-      <div class="telemetry-actions">
+      <div class="model-status-row">
+        <span id="tel-model-type" class="model-type-label">우주정거장형 3D</span>
+        <span id="tel-model-lod" class="model-lod-pill">줌인 시 3D 실물 표시</span>
+      </div>
+
+      <div class="telemetry-actions three-actions">
+        <button id="btn-closeup" class="action-btn action-primary" title="위성 바로 옆으로 이동해 3D 실물 모델 감상">
+          <span class="btn-ic" id="closeup-icon"></span>
+          <span>3D 근접 보기</span>
+        </button>
         <button id="btn-follow" class="action-btn">
           <span class="btn-ic" id="follow-icon"></span>
           <span>카메라 추적</span>
         </button>
         <button id="btn-flyto" class="action-btn">
           <span class="btn-ic" id="flyto-icon"></span>
-          <span>위치 이동</span>
+          <span>궤도 보기</span>
         </button>
       </div>
 
