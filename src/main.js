@@ -254,7 +254,10 @@ class OrbitPulseApp {
     this.state.followMode = true;
     this.hud.setFollowState(true);
     await this.getActiveEngineInstance().flyToCloseup(pos, rec);
-    this.hud.toast('3D 위성 근접 보기 활성화 — 드래그로 360° 회전, 스크롤로 줌 조절할 수 있습니다.', 'info');
+    const hint = this.hud.isMobile()
+      ? '3D 위성 근접 보기 — 한 손가락 드래그로 360° 회전, 두 손가락으로 줌 조절할 수 있습니다.'
+      : '3D 위성 근접 보기 활성화 — 드래그로 360° 회전, 스크롤로 줌 조절할 수 있습니다.';
+    this.hud.toast(hint, 'info');
   }
 
   flyToSelected() {

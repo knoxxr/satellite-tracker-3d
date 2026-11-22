@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#05080f" />
   <title>OrbitPulse 3D — 실시간 인공위성 3D 구글 지도 추적기</title>
   <meta
     name="description"
@@ -29,8 +30,12 @@
     <!-- Hover Tooltip -->
     <div id="sat-tooltip" class="sat-tooltip" hidden></div>
 
+    <!-- Mobile Backdrop Scrim -->
+    <div id="mobile-backdrop" class="mobile-backdrop" hidden></div>
+
     <!-- Left Floating Panel: Satellite Browser -->
     <aside id="left-drawer" class="hud-panel left-drawer" aria-label="인공위성 목록 및 검색">
+      <div id="drawer-handle" class="sheet-handle mobile-only" aria-hidden="true"><span></span></div>
       <header class="drawer-header">
         <div class="brand-group">
           <div class="brand-mark" id="brand-icon"></div>
@@ -69,7 +74,7 @@
     <!-- Collapsed Drawer Re-open Button -->
     <button id="btn-expand-drawer" class="hud-chip expand-drawer-btn" hidden title="위성 목록 열기">
       <span class="btn-ic" id="expand-icon"></span>
-      <span>위성 목록</span>
+      <span class="expand-label">위성 목록</span>
     </button>
 
     <!-- Top-Right Control Bar -->
@@ -87,22 +92,36 @@
       </div>
 
       <div class="control-actions">
-        <button id="btn-layers" class="hud-chip" title="지도 레이어 및 관측소 설정">
+        <button id="btn-layers" class="hud-chip" title="지도 레이어 및 관측소 설정" aria-label="지도 레이어 및 설정">
           <span class="btn-ic" id="layers-icon"></span>
-          <span>레이어</span>
+          <span class="chip-label">레이어</span>
         </button>
-        <button id="btn-add-sat" class="hud-chip" title="NORAD ID 또는 TLE 직접 추가">
+        <button id="btn-add-sat" class="hud-chip" title="NORAD ID 또는 TLE 직접 추가" aria-label="위성 직접 추가">
           <span class="btn-ic" id="plus-icon"></span>
-          <span>위성 추가</span>
+          <span class="chip-label">위성 추가</span>
         </button>
-        <button id="btn-api-key" class="hud-chip" title="Google Maps API 키 설정">
+        <button id="btn-api-key" class="hud-chip" title="Google Maps API 키 설정" aria-label="Google Maps API 키 설정">
           <span class="btn-ic" id="key-icon"></span>
-          <span id="api-key-label">Google API 키</span>
+          <span id="api-key-label" class="chip-label">Google API 키</span>
         </button>
       </div>
 
       <!-- Layers & Observer Popover -->
       <div id="layers-popover" class="hud-panel popover-panel" hidden>
+        <div class="popover-mobile-header mobile-only">
+          <span>지도 및 표시 설정</span>
+          <button id="btn-close-layers" class="icon-btn" aria-label="설정 닫기"></button>
+        </div>
+
+        <div class="popover-section mobile-only-section">
+          <div class="popover-label">3D 지도 엔진</div>
+          <div id="mobile-engine-options" class="option-grid three-col">
+            <button class="opt-btn active" data-engine="globe">3D 지구본</button>
+            <button class="opt-btn" data-engine="google-tiles">3D Tiles</button>
+            <button class="opt-btn" data-engine="google-native">Maps 3D</button>
+          </div>
+        </div>
+
         <div class="popover-section">
           <div class="popover-label">배경 지도 스타일</div>
           <div id="basemap-options" class="option-grid">
@@ -139,19 +158,26 @@
       </div>
     </nav>
 
-    <!-- Right Floating Telemetry Inspector -->
+    <!-- Right Floating Telemetry Inspector (Mobile Bottom Sheet) -->
     <section id="telemetry-panel" class="hud-panel telemetry-panel" hidden aria-label="선택된 인공위성 실시간 텔레메트리">
+      <div id="telemetry-handle" class="sheet-handle mobile-only" role="button" tabindex="0" aria-label="상세 정보 펼치기 또는 접기">
+        <span></span>
+      </div>
       <header class="telemetry-header">
         <div class="telemetry-title-wrap">
           <div class="telemetry-badges">
             <span id="tel-regime" class="badge badge-regime">LEO</span>
             <span id="tel-group" class="badge badge-group">우주정거장</span>
             <span id="tel-norad" class="mono-tag">NORAD 25544</span>
+            <span id="tel-peek-alt" class="peek-alt-pill mono mobile-only">-- km</span>
           </div>
           <h2 id="tel-name" class="telemetry-title">국제우주정거장 (ISS)</h2>
           <p id="tel-original-name" class="telemetry-sub"></p>
         </div>
-        <button id="btn-close-telemetry" class="icon-btn" title="패널 닫기" aria-label="패널 닫기"></button>
+        <div class="telemetry-header-btns">
+          <button id="btn-toggle-telemetry-expand" class="icon-btn mobile-only" title="상세 정보 펼치기/접기" aria-label="상세 정보 펼치기 또는 접기"></button>
+          <button id="btn-close-telemetry" class="icon-btn" title="패널 닫기" aria-label="패널 닫기"></button>
+        </div>
       </header>
 
       <p id="tel-summary" class="telemetry-summary" hidden></p>
@@ -254,6 +280,7 @@
 
       <div class="sim-controls">
         <button id="btn-play-pause" class="icon-btn" title="재생 / 일시정지" aria-label="재생 또는 일시정지"></button>
+        <button id="btn-speed-cycle" class="speed-cycle-btn mono mobile-only" title="시간 배속 전환" aria-label="시간 배속 전환">1×</button>
         <div id="speed-buttons" class="speed-group" role="group" aria-label="시간 배속">
           <button class="speed-btn active" data-speed="1">1×</button>
           <button class="speed-btn" data-speed="10">10×</button>

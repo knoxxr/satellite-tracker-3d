@@ -322,6 +322,11 @@ export class CesiumSatelliteEngine {
       this.viewer.cesiumWidget.creditContainer.classList.add('cesium-credit-minimal');
     }
 
+    // Cap effective pixel ratio to 2x on ultra-high-DPR mobile devices for smooth 60fps interaction
+    if (typeof window !== 'undefined' && window.devicePixelRatio > 2) {
+      this.viewer.resolutionScale = 2 / window.devicePixelRatio;
+    }
+
     this.setBasemap(this.currentBasemap);
 
     // Pure GPU Primitive collections (zero Entity WebWorker async crashes)
@@ -428,31 +433,50 @@ export class CesiumSatelliteEngine {
   setupInputHandlers() {
     const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
     this.eventHandler = handler;
+    const isCoarsePointer =
+      typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches;
+
+    const findSatIdAt = (pos, allowWidePick = false) => {
+      const direct = this.viewer.scene.pick(pos);
+      if (Cesium.defined(direct) && direct.id && typeof direct.id === 'object' && direct.id.satId) {
+        return direct.id.satId;
+      }
+      if (allowWidePick) {
+        const candidates = this.viewer.scene.drillPick(pos, 8, 28, 28);
+        for (const item of candidates) {
+          if (Cesium.defined(item) && item.id && typeof item.id === 'object' && item.id.satId) {
+            return item.id.satId;
+          }
+        }
+      }
+      return null;
+    };
 
     handler.setInputAction((movement) => {
-      const picked = this.viewer.scene.pick(movement.position);
-      if (Cesium.defined(picked) && picked.id && typeof picked.id === 'object' && picked.id.satId) {
-        this.onSelect?.(picked.id.satId);
+      const satId = findSatIdAt(movement.position, true);
+      if (satId !== null) {
+        this.onSelect?.(satId);
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    handler.setInputAction((movement) => {
-      const picked = this.viewer.scene.pick(movement.endPosition);
-      if (Cesium.defined(picked) && picked.id && typeof picked.id === 'object' && picked.id.satId) {
-        const satId = picked.id.satId;
-        this.container.style.cursor = 'pointer';
-        if (this.hoveredId !== satId) {
-          this.setHovered(satId);
+    if (!isCoarsePointer) {
+      handler.setInputAction((movement) => {
+        const satId = findSatIdAt(movement.endPosition, false);
+        if (satId !== null) {
+          this.container.style.cursor = 'pointer';
+          if (this.hoveredId !== satId) {
+            this.setHovered(satId);
+          }
+          this.onHover?.(satId, movement.endPosition);
+        } else {
+          this.container.style.cursor = 'grab';
+          if (this.hoveredId !== null) {
+            this.setHovered(null);
+            this.onHover?.(null, null);
+          }
         }
-        this.onHover?.(satId, movement.endPosition);
-      } else {
-        this.container.style.cursor = 'grab';
-        if (this.hoveredId !== null) {
-          this.setHovered(null);
-          this.onHover?.(null, null);
-        }
-      }
-    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    }
   }
 
   getSprite(hexColor, selected = false) {

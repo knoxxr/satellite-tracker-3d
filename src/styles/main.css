@@ -56,8 +56,11 @@ body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--bg-space);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .viewport-canvas {
@@ -66,6 +69,7 @@ body {
   width: 100%;
   height: 100%;
   z-index: 1;
+  touch-action: none;
 }
 
 /* Keep Cesium attribution clean and unobtrusive in bottom-right corner */
@@ -1281,45 +1285,507 @@ body {
   }
 }
 
+/* Mobile-Only Helpers (Hidden on Desktop) */
+.mobile-only,
+.mobile-only-section {
+  display: none;
+}
+
+.mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(3, 6, 12, 0.56);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.sheet-handle {
+  width: 100%;
+  padding: 10px 0 6px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  touch-action: pan-y;
+}
+
+.sheet-handle span {
+  display: block;
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.telemetry-header-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.peek-alt-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #7dd3fc;
+}
+
+.option-grid.three-col {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.speed-cycle-btn {
+  height: 36px;
+  min-width: 54px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.speed-cycle-btn.active {
+  background: var(--surface-active);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #e0f2fe;
+}
+
+.popover-mobile-header {
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 /* Responsive Adaptations */
-@media (max-width: 960px) {
+@media (max-width: 1040px) {
   .left-drawer {
-    width: 280px;
+    width: 286px;
   }
   .telemetry-panel {
-    width: 300px;
+    width: 308px;
   }
   .sync-block {
     display: none;
   }
 }
 
-@media (max-width: 680px) {
-  .left-drawer {
-    width: calc(100vw - 32px);
-    bottom: 90px;
+@media (max-width: 768px) {
+  .mobile-only {
+    display: inline-flex;
   }
-  .telemetry-panel {
-    left: 16px;
-    right: 16px;
-    width: auto;
-    top: auto;
-    bottom: 84px;
-    max-height: 48vh;
+
+  .sheet-handle.mobile-only,
+  .popover-mobile-header.mobile-only {
+    display: flex;
   }
+
+  .mobile-only-section {
+    display: flex;
+  }
+
+  /* Top Bar: Left "위성 목록" chip + Right icon actions — zero overlap */
+  .expand-drawer-btn {
+    top: calc(10px + env(safe-area-inset-top));
+    left: 10px;
+    height: 42px;
+    padding: 0 13px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 26;
+  }
+
   .top-controls {
-    top: 12px;
-    right: 12px;
-    left: 12px;
+    top: calc(10px + env(safe-area-inset-top));
+    right: 10px;
+    left: auto;
+    gap: 6px;
+    z-index: 26;
   }
+
   .hud-segmented {
     display: none;
   }
-  .bottom-bar {
-    gap: 10px;
-    padding: 8px 12px;
+
+  .control-actions {
+    gap: 6px;
   }
+
+  .top-controls .hud-chip {
+    height: 42px;
+    min-width: 42px;
+    padding: 0 11px;
+    border-radius: 12px;
+    justify-content: center;
+  }
+
+  .top-controls .chip-label {
+    display: none;
+  }
+
+  .btn-ic,
+  .btn-ic svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .icon-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Satellite Browser as Slide-Up Bottom Sheet */
+  .left-drawer {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 82dvh;
+    max-height: 82dvh;
+    border-radius: 20px 20px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    z-index: 45;
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateY(0);
+    will-change: transform;
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  }
+
+  .left-drawer.collapsed {
+    transform: translateY(105%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .drawer-header {
+    padding: 4px 16px 12px;
+  }
+
+  .search-section {
+    padding: 10px 14px 12px;
+    gap: 10px;
+  }
+
+  #sat-search {
+    height: 44px;
+    font-size: 16px;
+    padding-left: 38px;
+    border-radius: 11px;
+  }
+
+  .search-icon {
+    left: 13px;
+    width: 17px;
+    height: 17px;
+  }
+
+  /* Horizontally Scrollable Category Chips */
+  .category-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    padding-bottom: 2px;
+  }
+
+  .category-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cat-tab {
+    flex-shrink: 0;
+    height: 34px;
+    padding: 0 12px;
+    font-size: 12.5px;
+  }
+
+  .list-meta {
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .text-btn {
+    padding: 6px 8px;
+    font-size: 12.5px;
+  }
+
+  .sat-list {
+    padding: 6px 10px 16px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .sat-item {
+    min-height: 56px;
+    padding: 11px 12px;
+    margin-bottom: 4px;
+    border-radius: 12px;
+  }
+
+  .sat-item-name {
+    font-size: 14px;
+  }
+
+  .sat-item-meta {
+    font-size: 11.5px;
+  }
+
+  .sat-item-alt {
+    font-size: 12.5px;
+  }
+
+  /* Layers Popover as Mobile Bottom Sheet */
+  .popover-panel {
+    position: fixed;
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 76dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    z-index: 46;
+    border-radius: 18px;
+    padding: 14px 16px 16px;
+    gap: 14px;
+  }
+
+  .opt-btn {
+    height: 40px;
+    font-size: 12.5px;
+    border-radius: 10px;
+  }
+
+  .toggle-row {
+    min-height: 40px;
+    font-size: 13.5px;
+  }
+
+  .toggle-row input[type='checkbox'] {
+    width: 20px;
+    height: 20px;
+  }
+
+  .hud-select {
+    height: 44px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+
+  /* Telemetry Panel as Collapsible Peek/Expanded Bottom Sheet */
+  .telemetry-panel {
+    position: fixed;
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: calc(66px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 60dvh;
+    padding: 0 14px 14px;
+    border-radius: 18px;
+    gap: 10px;
+    z-index: 28;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .telemetry-panel.mobile-peek {
+    max-height: none;
+    overflow: hidden;
+    padding-bottom: 12px;
+    gap: 9px;
+  }
+
+  .telemetry-panel.mobile-peek .telemetry-summary,
+  .telemetry-panel.mobile-peek .model-status-row,
+  .telemetry-panel.mobile-peek .telemetry-section,
+  .telemetry-panel.mobile-peek .telemetry-sub,
+  .telemetry-panel.mobile-peek .badge-group,
+  .telemetry-panel.mobile-peek .mono-tag {
+    display: none;
+  }
+
+  .telemetry-panel:not(.mobile-peek) .peek-alt-pill {
+    display: none;
+  }
+
+  .telemetry-header {
+    align-items: center;
+    gap: 8px;
+  }
+
+  .telemetry-badges {
+    margin-bottom: 3px;
+    gap: 5px;
+  }
+
+  .telemetry-title {
+    font-size: 15px;
+  }
+
+  .telemetry-actions.three-actions {
+    grid-template-columns: 1.25fr 1fr 0.95fr;
+    gap: 6px;
+  }
+
+  .action-btn {
+    height: 42px;
+    padding: 0 8px;
+    font-size: 12px;
+    border-radius: 11px;
+  }
+
+  .metric-cell {
+    padding: 9px 10px;
+  }
+
+  .metric-value {
+    font-size: 13.5px;
+  }
+
+  /* Bottom Time Control Bar: Clean Single Row, No Overflow */
+  .bottom-bar {
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    transform: none;
+    width: auto;
+    max-width: none;
+    height: 48px;
+    padding: 6px 10px;
+    border-radius: 14px;
+    justify-content: space-between;
+    gap: 8px;
+    z-index: 26;
+  }
+
+  .clock-block {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .live-badge {
+    height: 34px;
+    padding: 0 10px;
+    font-size: 11.5px;
+  }
+
+  .clock-main {
+    font-size: 12.5px;
+  }
+
   .clock-sub {
     display: none;
   }
+
+  .sim-controls {
+    padding-left: 8px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .speed-group {
+    display: none;
+  }
+
+  /* Keep Cesium credit unobtrusive and out of touch areas */
+  .cesium-credit-minimal {
+    display: none !important;
+  }
+
+  /* Modals: Keyboard & Touch Friendly */
+  .modal-backdrop {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal-card {
+    max-height: 86dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 18px;
+  }
+
+  .hud-input,
+  .hud-textarea {
+    font-size: 16px;
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .primary-btn,
+  .secondary-btn {
+    height: 42px;
+    font-size: 13.5px;
+  }
+
+  /* Move Toasts Below Top Bar So Bottom Sheets Never Cover Them */
+  .toast-container {
+    top: calc(60px + env(safe-area-inset-top));
+    left: 10px;
+    right: 10px;
+    bottom: auto;
+    max-width: none;
+  }
 }
+
+@media (max-width: 400px) {
+  .telemetry-actions.three-actions {
+    grid-template-columns: 1.15fr 1fr 0.95fr;
+  }
+
+  .action-btn {
+    font-size: 11.5px;
+    gap: 4px;
+    padding: 0 6px;
+  }
+
+  .action-btn .btn-ic,
+  .action-btn .btn-ic svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .inline-row {
+    flex-direction: column;
+  }
+
+  .inline-row .primary-btn {
+    width: 100%;
+  }
+}
+
+@media (hover: none) {
+  .sat-tooltip {
+    display: none !important;
+  }
+}
+

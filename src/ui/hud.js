@@ -25,7 +25,18 @@ function fmtKstTime(date) {
   }).format(date);
 }
 
-function fmtClockKst(date) {
+const SPEED_STEPS = [1, 10, 60, 300, 1000];
+
+function fmtClockKst(date, compact = false) {
+  if (compact) {
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date);
+  }
   return new Intl.DateTimeFormat('ko-KR', {
     timeZone: 'Asia/Seoul',
     year: 'numeric',
@@ -48,17 +59,27 @@ export class HudController {
     this.listRowMap = new Map(); // id -> { row, altEl }
     this.lastRenderedIds = '';
     this.pendingEngineAfterKey = null;
+    this.currentSpeed = 1;
+    this.telemetryExpanded = false;
+    this.mobileMq = window.matchMedia('(max-width: 768px)');
     this.cacheDom();
     this.injectIcons();
     this.renderCategoryTabs();
     this.renderObserverPresets();
     this.bindEvents();
+    this.applyResponsiveInitialState();
+  }
+
+  isMobile() {
+    return this.mobileMq.matches;
   }
 
   cacheDom() {
     const $ = (id) => document.getElementById(id);
     this.el = {
+      mobileBackdrop: $('mobile-backdrop'),
       leftDrawer: $('left-drawer'),
+      drawerHandle: $('drawer-handle'),
       btnCollapseDrawer: $('btn-collapse-drawer'),
       btnExpandDrawer: $('btn-expand-drawer'),
       engineStatusText: $('engine-status-text'),
@@ -71,7 +92,9 @@ export class HudController {
       engGlobe: $('eng-globe'),
       engGoogleTiles: $('eng-google-tiles'),
       engGoogleNative: $('eng-google-native'),
+      mobileEngineOptions: $('mobile-engine-options'),
       btnLayers: $('btn-layers'),
+      btnCloseLayers: $('btn-close-layers'),
       layersPopover: $('layers-popover'),
       basemapOptions: $('basemap-options'),
       toggleLighting: $('toggle-lighting'),
@@ -85,10 +108,13 @@ export class HudController {
       apiKeyLabel: $('api-key-label'),
 
       telemetryPanel: $('telemetry-panel'),
+      telemetryHandle: $('telemetry-handle'),
+      btnToggleTelemetryExpand: $('btn-toggle-telemetry-expand'),
       btnCloseTelemetry: $('btn-close-telemetry'),
       telRegime: $('tel-regime'),
       telGroup: $('tel-group'),
       telNorad: $('tel-norad'),
+      telPeekAlt: $('tel-peek-alt'),
       telName: $('tel-name'),
       telOriginalName: $('tel-original-name'),
       telSummary: $('tel-summary'),
@@ -116,6 +142,7 @@ export class HudController {
       clockKst: $('clock-kst'),
       clockUtc: $('clock-utc'),
       btnPlayPause: $('btn-play-pause'),
+      btnSpeedCycle: $('btn-speed-cycle'),
       speedButtons: $('speed-buttons'),
       syncStatus: $('sync-status'),
 
@@ -149,13 +176,87 @@ export class HudController {
     setIcon('closeup-icon', ICONS.cube3d);
     setIcon('follow-icon', ICONS.crosshair);
     setIcon('flyto-icon', ICONS.orbit);
-    setIcon('expand-icon', ICONS.chevronRight);
+    setIcon('expand-icon', ICONS.list);
     this.el.btnCollapseDrawer.innerHTML = ICONS.chevronLeft;
     this.el.btnCloseTelemetry.innerHTML = ICONS.close;
+    if (this.el.btnCloseLayers) this.el.btnCloseLayers.innerHTML = ICONS.close;
+    if (this.el.btnToggleTelemetryExpand) {
+      this.el.btnToggleTelemetryExpand.innerHTML = ICONS.chevronUp;
+    }
     this.el.btnPlayPause.innerHTML = ICONS.pause;
     document.querySelectorAll('.modal-close').forEach((btn) => {
       btn.innerHTML = ICONS.close;
     });
+  }
+
+  applyResponsiveInitialState() {
+    if (this.isMobile()) {
+      this.closeDrawer();
+      this.setTelemetryExpanded(false);
+    } else {
+      this.el.telemetryPanel.classList.remove('mobile-peek');
+      this.el.btnCollapseDrawer.innerHTML = ICONS.chevronLeft;
+      this.updateMobileBackdrop();
+    }
+    this.updateDrawerCloseIcon();
+  }
+
+  updateDrawerCloseIcon() {
+    this.el.btnCollapseDrawer.innerHTML = this.isMobile() ? ICONS.close : ICONS.chevronLeft;
+  }
+
+  openDrawer() {
+    if (this.isMobile()) {
+      this.closeLayersPopover();
+    }
+    this.el.leftDrawer.classList.remove('collapsed');
+    this.el.btnExpandDrawer.hidden = true;
+    this.updateMobileBackdrop();
+  }
+
+  closeDrawer() {
+    this.el.leftDrawer.classList.add('collapsed');
+    this.el.btnExpandDrawer.hidden = false;
+    this.updateMobileBackdrop();
+  }
+
+  openLayersPopover() {
+    if (this.isMobile()) {
+      this.el.leftDrawer.classList.add('collapsed');
+      this.el.btnExpandDrawer.hidden = false;
+    }
+    this.el.layersPopover.hidden = false;
+    this.updateMobileBackdrop();
+  }
+
+  closeLayersPopover() {
+    this.el.layersPopover.hidden = true;
+    this.updateMobileBackdrop();
+  }
+
+  setTelemetryExpanded(expanded) {
+    this.telemetryExpanded = Boolean(expanded);
+    if (this.isMobile()) {
+      this.el.telemetryPanel.classList.toggle('mobile-peek', !this.telemetryExpanded);
+    } else {
+      this.el.telemetryPanel.classList.remove('mobile-peek');
+    }
+    if (this.el.btnToggleTelemetryExpand) {
+      this.el.btnToggleTelemetryExpand.innerHTML = this.telemetryExpanded
+        ? ICONS.chevronDown
+        : ICONS.chevronUp;
+    }
+  }
+
+  updateMobileBackdrop() {
+    if (!this.el.mobileBackdrop) return;
+    if (!this.isMobile()) {
+      this.el.mobileBackdrop.hidden = true;
+      return;
+    }
+    const drawerOpen = !this.el.leftDrawer.classList.contains('collapsed');
+    const layersOpen = !this.el.layersPopover.hidden;
+    this.el.mobileBackdrop.hidden = !(drawerOpen || layersOpen);
   }
 
   renderCategoryTabs() {
@@ -175,14 +276,36 @@ export class HudController {
   }
 
   bindEvents() {
+    // Sync layout when crossing mobile/desktop breakpoint
+    this.mobileMq.addEventListener?.('change', () => {
+      this.updateDrawerCloseIcon();
+      if (this.isMobile()) {
+        this.closeDrawer();
+        this.setTelemetryExpanded(false);
+      } else {
+        this.el.telemetryPanel.classList.remove('mobile-peek');
+        this.openDrawer();
+      }
+      this.updateMobileBackdrop();
+    });
+
+    // Mobile backdrop dismiss
+    this.el.mobileBackdrop?.addEventListener('click', () => {
+      this.closeDrawer();
+      this.closeLayersPopover();
+    });
+
     // Drawer collapse / expand
     this.el.btnCollapseDrawer.addEventListener('click', () => {
-      this.el.leftDrawer.classList.add('collapsed');
-      this.el.btnExpandDrawer.hidden = false;
+      this.closeDrawer();
     });
     this.el.btnExpandDrawer.addEventListener('click', () => {
-      this.el.leftDrawer.classList.remove('collapsed');
-      this.el.btnExpandDrawer.hidden = true;
+      this.openDrawer();
+    });
+
+    // Swipe down on drawer handle to dismiss on mobile
+    this.bindVerticalSwipe(this.el.drawerHandle, {
+      onSwipeDown: () => this.closeDrawer(),
     });
 
     // Category tabs
@@ -211,17 +334,30 @@ export class HudController {
       this.cb.onRefreshData?.();
     });
 
-    // Engine selector
+    // Engine selector (desktop segmented + mobile options inside layers sheet)
     [this.el.engGlobe, this.el.engGoogleTiles, this.el.engGoogleNative].forEach((btn) => {
       btn.addEventListener('click', () => {
         this.cb.onEngineChange?.(btn.dataset.engine);
       });
     });
+    this.el.mobileEngineOptions?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.opt-btn');
+      if (!btn) return;
+      this.cb.onEngineChange?.(btn.dataset.engine);
+      if (this.isMobile()) this.closeLayersPopover();
+    });
 
     // Layers popover toggle
     this.el.btnLayers.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.el.layersPopover.hidden = !this.el.layersPopover.hidden;
+      if (this.el.layersPopover.hidden) {
+        this.openLayersPopover();
+      } else {
+        this.closeLayersPopover();
+      }
+    });
+    this.el.btnCloseLayers?.addEventListener('click', () => {
+      this.closeLayersPopover();
     });
     document.addEventListener('click', (e) => {
       if (
@@ -229,7 +365,7 @@ export class HudController {
         !this.el.layersPopover.contains(e.target) &&
         !this.el.btnLayers.contains(e.target)
       ) {
-        this.el.layersPopover.hidden = true;
+        this.closeLayersPopover();
       }
     });
 
@@ -260,19 +396,49 @@ export class HudController {
     });
     this.el.btnGeolocate.addEventListener('click', () => {
       this.cb.onRequestGeolocation?.();
+      if (this.isMobile()) this.closeLayersPopover();
     });
 
-    // Telemetry controls
+    // Telemetry controls & mobile bottom-sheet toggle/swipe
     this.el.btnCloseTelemetry.addEventListener('click', () => {
+      this.setTelemetryExpanded(false);
       this.cb.onDeselectSatellite?.();
     });
+    this.el.btnToggleTelemetryExpand?.addEventListener('click', () => {
+      this.setTelemetryExpanded(!this.telemetryExpanded);
+    });
+    this.el.telemetryHandle?.addEventListener('click', () => {
+      this.setTelemetryExpanded(!this.telemetryExpanded);
+    });
+    this.el.telemetryHandle?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.setTelemetryExpanded(!this.telemetryExpanded);
+      }
+    });
+    this.bindVerticalSwipe(this.el.telemetryHandle, {
+      onSwipeUp: () => this.setTelemetryExpanded(true),
+      onSwipeDown: () => {
+        if (this.telemetryExpanded) {
+          this.setTelemetryExpanded(false);
+        } else {
+          this.cb.onDeselectSatellite?.();
+        }
+      },
+    });
     this.el.btnCloseup.addEventListener('click', () => {
+      if (this.isMobile()) {
+        this.setTelemetryExpanded(false);
+      }
       this.cb.onCloseupSelected?.();
     });
     this.el.btnFollow.addEventListener('click', () => {
       this.cb.onToggleFollow?.();
     });
     this.el.btnFlyto.addEventListener('click', () => {
+      if (this.isMobile()) {
+        this.setTelemetryExpanded(false);
+      }
       this.cb.onFlyToSelected?.();
     });
 
@@ -286,15 +452,24 @@ export class HudController {
     this.el.speedButtons.addEventListener('click', (e) => {
       const btn = e.target.closest('.speed-btn');
       if (!btn) return;
-      this.setActiveSpeed(Number(btn.dataset.speed));
-      this.cb.onSpeedChange?.(Number(btn.dataset.speed));
+      const spd = Number(btn.dataset.speed);
+      this.setActiveSpeed(spd);
+      this.cb.onSpeedChange?.(spd);
+    });
+    this.el.btnSpeedCycle?.addEventListener('click', () => {
+      const idx = SPEED_STEPS.indexOf(this.currentSpeed);
+      const next = SPEED_STEPS[(idx + 1) % SPEED_STEPS.length];
+      this.setActiveSpeed(next);
+      this.cb.onSpeedChange?.(next);
     });
 
     // Modals
     this.el.btnApiKey.addEventListener('click', () => {
+      if (this.isMobile()) this.closeLayersPopover();
       this.openApiKeyModal();
     });
     this.el.btnAddSat.addEventListener('click', () => {
+      if (this.isMobile()) this.closeLayersPopover();
       this.el.modalAddSat.hidden = false;
       this.el.inputNoradId.focus();
     });
@@ -336,6 +511,34 @@ export class HudController {
     });
   }
 
+  bindVerticalSwipe(el, { onSwipeUp, onSwipeDown }) {
+    if (!el) return;
+    let startY = null;
+    el.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length === 1) {
+          startY = e.touches[0].clientY;
+        }
+      },
+      { passive: true }
+    );
+    el.addEventListener(
+      'touchend',
+      (e) => {
+        if (startY === null || e.changedTouches.length === 0) return;
+        const dy = e.changedTouches[0].clientY - startY;
+        startY = null;
+        if (dy < -28) {
+          onSwipeUp?.();
+        } else if (dy > 28) {
+          onSwipeDown?.();
+        }
+      },
+      { passive: true }
+    );
+  }
+
   openApiKeyModal(currentKey = '', targetEngine = null) {
     this.pendingEngineAfterKey = targetEngine;
     if (currentKey) {
@@ -366,6 +569,9 @@ export class HudController {
     [this.el.engGlobe, this.el.engGoogleTiles, this.el.engGoogleNative].forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.engine === engineId);
     });
+    this.el.mobileEngineOptions?.querySelectorAll('.opt-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.engine === engineId);
+    });
     if (subtitleText) {
       this.el.engineStatusText.textContent = subtitleText;
     }
@@ -376,9 +582,14 @@ export class HudController {
   }
 
   setActiveSpeed(speed) {
+    this.currentSpeed = speed;
     this.el.speedButtons.querySelectorAll('.speed-btn').forEach((btn) => {
       btn.classList.toggle('active', Number(btn.dataset.speed) === speed);
     });
+    if (this.el.btnSpeedCycle) {
+      this.el.btnSpeedCycle.textContent = `${speed}×`;
+      this.el.btnSpeedCycle.classList.toggle('active', speed > 1);
+    }
   }
 
   setLiveIndicator(isLive) {
@@ -401,7 +612,9 @@ export class HudController {
   }
 
   updateClock(simDate) {
-    this.el.clockKst.textContent = `${fmtClockKst(simDate)} KST`;
+    this.el.clockKst.textContent = this.isMobile()
+      ? `${fmtClockKst(simDate, true)} KST`
+      : `${fmtClockKst(simDate, false)} KST`;
     this.el.clockUtc.textContent = fmtClockUtc(simDate);
   }
 
@@ -443,7 +656,13 @@ export class HudController {
             <span class="sat-regime-tag mono">${rec.regime}</span>
           </div>
         `;
-        row.addEventListener('click', () => this.cb.onSelectSatellite?.(rec.id, true));
+        row.addEventListener('click', () => {
+          this.cb.onSelectSatellite?.(rec.id, true);
+          if (this.isMobile()) {
+            this.closeDrawer();
+            this.setTelemetryExpanded(false);
+          }
+        });
         const altEl = row.querySelector('.sat-item-alt');
         this.listRowMap.set(rec.id, { row, altEl });
         frag.appendChild(row);
@@ -474,6 +693,9 @@ export class HudController {
     this.el.telRegime.textContent = record.regime;
     this.el.telGroup.textContent = getGroupLabel(record.group);
     this.el.telNorad.textContent = `NORAD ${record.id}`;
+    if (this.el.telPeekAlt) {
+      this.el.telPeekAlt.textContent = `${Math.round(pos.altKm).toLocaleString()} km · ${pos.speedKmS.toFixed(1)} km/s`;
+    }
     this.el.telName.textContent = info.title;
     this.el.telOriginalName.textContent =
       info.title !== info.originalName
