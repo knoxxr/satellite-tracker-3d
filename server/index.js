@@ -26,6 +26,7 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
   '.glb': 'model/gltf-binary',
   '.gltf': 'model/gltf+json',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 function sendJson(res, status, payload) {

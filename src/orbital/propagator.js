@@ -338,3 +338,133 @@ export function predictNextPass(record, startDate, observer, maxHours = 24) {
     losAzimuthDeg: losAz,
   };
 }
+
+/**
+ * Predict up to maxPasses upcoming visible passes over the observer within maxHours (default 48h).
+ */
+export function predictUpcomingPasses(record, startDate, observer, maxHours = 48, maxPasses = 5) {
+  const currentProp = propagateSatellite(record, startDate);
+  if (!currentProp) return { status: 'UNAVAILABLE', passes: [] };
+
+  const currentLook = computeLookAngles(currentProp, observer);
+
+  if (record.regime === 'GEO') {
+    return {
+      status: currentLook && currentLook.elevationDeg > 0 ? 'GEO_ALWAYS_VISIBLE' : 'GEO_BELOW_HORIZON',
+      maxElevationDeg: currentLook ? currentLook.elevationDeg : -90,
+      aosAzimuthDeg: currentLook ? currentLook.azimuthDeg : 0,
+      passes: [],
+    };
+  }
+
+  const startMs = startDate.getTime();
+  const endMs = startMs + maxHours * 3600 * 1000;
+  const coarseStepMs = record.periodMin < 180 ? 35_000 : 120_000;
+  const fineStepMs = 6_000;
+
+  const passes = [];
+  let inPass = Boolean(currentLook && currentLook.elevationDeg > 0);
+  let isInitialVisible = inPass;
+  let aosMs = inPass ? startMs : null;
+  let maxEl = inPass ? currentLook.elevationDeg : -90;
+  let maxTimeMs = inPass ? startMs : null;
+  let aosAz = inPass ? currentLook.azimuthDeg : 0;
+
+  for (let t = startMs + coarseStepMs; t <= endMs && passes.length < maxPasses; t += coarseStepMs) {
+    const prop = propagateSatellite(record, new Date(t));
+    if (!prop) continue;
+    const look = computeLookAngles(prop, observer);
+    if (!look) continue;
+
+    if (!inPass && look.elevationDeg > 0) {
+      inPass = true;
+      isInitialVisible = false;
+      aosMs = t;
+      aosAz = look.azimuthDeg;
+      for (let ft = t - coarseStepMs; ft <= t; ft += fineStepMs) {
+        const fp = propagateSatellite(record, new Date(ft));
+        const fl = fp && computeLookAngles(fp, observer);
+        if (fl && fl.elevationDeg > 0) {
+          aosMs = ft;
+          aosAz = fl.azimuthDeg;
+          break;
+        }
+      }
+      maxEl = look.elevationDeg;
+      maxTimeMs = t;
+    } else if (inPass && look.elevationDeg > 0) {
+      if (look.elevationDeg > maxEl) {
+        maxEl = look.elevationDeg;
+        maxTimeMs = t;
+      }
+    } else if (inPass && look.elevationDeg <= 0) {
+      let losMs = t;
+      let losAz = look.azimuthDeg;
+      for (let ft = t - coarseStepMs; ft <= t; ft += fineStepMs) {
+        const fp = propagateSatellite(record, new Date(ft));
+        const fl = fp && computeLookAngles(fp, observer);
+        if (fl && fl.elevationDeg > maxEl) {
+          maxEl = fl.elevationDeg;
+          maxTimeMs = ft;
+        }
+        if (fl && fl.elevationDeg <= 0) {
+          losMs = ft;
+          losAz = fl.azimuthDeg;
+          break;
+        }
+      }
+      // Refine peak
+      if (maxTimeMs !== null) {
+        for (let ft = maxTimeMs - coarseStepMs; ft <= maxTimeMs + coarseStepMs; ft += fineStepMs) {
+          const fp = propagateSatellite(record, new Date(ft));
+          const fl = fp && computeLookAngles(fp, observer);
+          if (fl && fl.elevationDeg > maxEl) {
+            maxEl = fl.elevationDeg;
+            maxTimeMs = ft;
+          }
+        }
+      }
+
+      passes.push({
+        status: isInitialVisible ? 'VISIBLE_NOW' : 'UPCOMING',
+        aos: new Date(aosMs),
+        maxTime: new Date(maxTimeMs || aosMs),
+        los: new Date(losMs),
+        durationSec: Math.max(0, Math.round((losMs - aosMs) / 1000)),
+        maxElevationDeg: maxEl,
+        aosAzimuthDeg: aosAz,
+        losAzimuthDeg: losAz,
+      });
+
+      inPass = false;
+      isInitialVisible = false;
+      aosMs = null;
+      maxEl = -90;
+      maxTimeMs = null;
+    }
+  }
+
+  // Handle a pass still open at the end of the search window
+  if (inPass && aosMs !== null && passes.length < maxPasses) {
+    passes.push({
+      status: isInitialVisible ? 'VISIBLE_NOW' : 'UPCOMING',
+      aos: new Date(aosMs),
+      maxTime: new Date(maxTimeMs || aosMs),
+      los: null,
+      durationSec: null,
+      maxElevationDeg: maxEl,
+      aosAzimuthDeg: aosAz,
+      losAzimuthDeg: 0,
+    });
+  }
+
+  if (passes.length === 0) {
+    return { status: 'NO_PASS_24H', passes: [] };
+  }
+
+  return {
+    ...passes[0],
+    passes,
+  };
+}
+

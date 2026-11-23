@@ -1,5 +1,6 @@
 export const CATEGORIES = [
   { id: 'featured', label: '주요 전체', color: '#38bdf8' },
+  { id: 'favorites', label: '즐겨찾기', color: '#fbbf24' },
   { id: 'stations', label: '우주정거장', color: '#f59e0b' },
   { id: 'korea', label: '한국 위성', color: '#38bdf8' },
   { id: 'weather', label: '기상·관측', color: '#10b981' },

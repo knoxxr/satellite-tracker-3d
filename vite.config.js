@@ -70,6 +70,19 @@ export default defineConfig({
   define: {
     CESIUM_BASE_URL: JSON.stringify(`${basePath}cesium/`),
   },
+  build: {
+    chunkSizeWarningLimit: 1200,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-cesium', test: /node_modules[\\/](@cesium|cesium)[\\/]/ },
+            { name: 'vendor-orbital', test: /node_modules[\\/]satellite\.js/ },
+          ],
+        },
+      },
+    },
+  },
   worker: {
     format: 'es',
   },

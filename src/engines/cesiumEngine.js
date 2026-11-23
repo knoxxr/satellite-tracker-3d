@@ -216,11 +216,12 @@ function computeLvlhModelMatrix(satCartesian, velEcfKmS) {
 }
 
 export class CesiumSatelliteEngine {
-  constructor(container, { onSelect, onHover, onModelStateChange }) {
+  constructor(container, { onSelect, onHover, onModelStateChange, onModelLoadingChange }) {
     this.container = container;
     this.onSelect = onSelect;
     this.onHover = onHover;
     this.onModelStateChange = onModelStateChange;
+    this.onModelLoadingChange = onModelLoadingChange;
     this.viewer = null;
     this.billboards = null;
     this.labels = null;
@@ -244,6 +245,7 @@ export class CesiumSatelliteEngine {
     this.followMode = false;
     this.showOrbit = true;
     this.showFootprint = true;
+    this.showAttitudeVectors = true;
     this.enableLighting = false;
     this.observer = null;
 
@@ -253,6 +255,10 @@ export class CesiumSatelliteEngine {
     this.nadirLine = null;
     this.footprintLine = null;
     this.losLine = null;
+    this.velocityVectorLine = null;
+    this.nadirVectorLine = null;
+    this.velocityLabel = null;
+    this.nadirLabel = null;
     this.subSatPoint = null;
     this.observerPoint = null;
     this.observerLabel = null;
@@ -428,6 +434,55 @@ export class CesiumSatelliteEngine {
       verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
+
+    // Closeup 3D Attitude Guides: Velocity (+Forward) and Nadir (Earthward)
+    this.velocityVectorLine = this.polylines.add({
+      show: false,
+      positions: [DEFAULT_ORBIT_POS, DEFAULT_SURFACE_POS],
+      width: 6,
+      material: Cesium.Material.fromType('PolylineArrow', {
+        color: Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.95),
+      }),
+    });
+
+    this.nadirVectorLine = this.polylines.add({
+      show: false,
+      positions: [DEFAULT_ORBIT_POS, DEFAULT_SURFACE_POS],
+      width: 5,
+      material: Cesium.Material.fromType('PolylineArrow', {
+        color: Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.92),
+      }),
+    });
+
+    this.velocityLabel = this.observerLabels.add({
+      show: false,
+      position: DEFAULT_ORBIT_POS,
+      text: '진행 방향',
+      font: '600 10.5px Inter, "Noto Sans KR", sans-serif',
+      fillColor: Cesium.Color.fromCssColorString('#bae6fd'),
+      outlineColor: Cesium.Color.fromCssColorString('#05080f'),
+      outlineWidth: 3,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      pixelOffset: new Cesium.Cartesian2(0, -10),
+      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    });
+
+    this.nadirLabel = this.observerLabels.add({
+      show: false,
+      position: DEFAULT_ORBIT_POS,
+      text: '지구 방향',
+      font: '600 10.5px Inter, "Noto Sans KR", sans-serif',
+      fillColor: Cesium.Color.fromCssColorString('#fde68a'),
+      outlineColor: Cesium.Color.fromCssColorString('#05080f'),
+      outlineWidth: 3,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      pixelOffset: new Cesium.Cartesian2(0, 12),
+      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+      verticalOrigin: Cesium.VerticalOrigin.TOP,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    });
   }
 
   setupInputHandlers() {
@@ -543,8 +598,14 @@ export class CesiumSatelliteEngine {
   setLighting(enabled) {
     this.enableLighting = enabled;
     if (this.viewer) {
-      this.viewer.scene.globe.enableLighting = enabled;
-      this.viewer.scene.light = enabled ? new Cesium.SunLight({ intensity: 2.4 }) : this.spacecraftLight;
+      const globe = this.viewer.scene.globe;
+      globe.enableLighting = enabled;
+      globe.dynamicAtmosphereLighting = enabled;
+      globe.dynamicAtmosphereLightingFromSun = enabled;
+      // Keep nighttime continents subtly legible instead of crushing to pitch black
+      globe.nightFadeInDistance = 75000000;
+      globe.nightFadeOutDistance = 14000000;
+      this.viewer.scene.light = enabled ? new Cesium.SunLight({ intensity: 2.8 }) : this.spacecraftLight;
     }
   }
 
@@ -712,6 +773,7 @@ export class CesiumSatelliteEngine {
     };
 
     const loadPromise = (async () => {
+      this.onModelLoadingChange?.(true, meta);
       try {
         const entry = await loadSingleGlb(meta.file);
         if (entry) {
@@ -731,6 +793,7 @@ export class CesiumSatelliteEngine {
         }
       } finally {
         this.modelLoadPromises.delete(meta.key);
+        this.onModelLoadingChange?.(false, meta);
       }
     })();
 
@@ -759,8 +822,16 @@ export class CesiumSatelliteEngine {
     }
   }
 
+  hideAttitudeVectors() {
+    if (this.velocityVectorLine) this.velocityVectorLine.show = false;
+    if (this.nadirVectorLine) this.nadirVectorLine.show = false;
+    if (this.velocityLabel) this.velocityLabel.show = false;
+    if (this.nadirLabel) this.nadirLabel.show = false;
+  }
+
   clearSelectionOverlays() {
     this.hideAll3dModels();
+    this.hideAttitudeVectors();
     if (this.pastOrbitLine) this.pastOrbitLine.show = false;
     if (this.futureOrbitLine) this.futureOrbitLine.show = false;
     if (this.nadirLine) this.nadirLine.show = false;
@@ -783,6 +854,13 @@ export class CesiumSatelliteEngine {
       if (this.footprintLine) this.footprintLine.show = false;
       if (this.nadirLine) this.nadirLine.show = false;
       if (this.subSatPoint) this.subSatPoint.show = false;
+    }
+  }
+
+  setAttitudeVectorsVisible(visible) {
+    this.showAttitudeVectors = visible;
+    if (!visible) {
+      this.hideAttitudeVectors();
     }
   }
 
@@ -932,8 +1010,46 @@ export class CesiumSatelliteEngine {
           entry.model.show = false;
         }
       }
+
+      // Render 3D velocity & nadir attitude guide arrows when zoomed in close to the spacecraft
+      const showGuides =
+        this.showAttitudeVectors &&
+        cached.model.ready &&
+        (this.closeupOrbitLocked || camDist < (cached.meta.closeupDistanceM || 260) * 4);
+      if (showGuides && this.velocityVectorLine && this.nadirVectorLine) {
+        const radius = cached.meta.targetRadiusM || 28;
+        const vecLen = Math.max(radius * 2.1, 35);
+        // Extract forward (+X) and zenith (+Z) columns from LVLH matrix
+        const fwd = new Cesium.Cartesian3(lvlh[0], lvlh[1], lvlh[2]);
+        const up = new Cesium.Cartesian3(lvlh[8], lvlh[9], lvlh[10]);
+        const velTip = Cesium.Cartesian3.add(
+          satCartesian,
+          Cesium.Cartesian3.multiplyByScalar(fwd, vecLen, new Cesium.Cartesian3()),
+          new Cesium.Cartesian3()
+        );
+        const nadirTip = Cesium.Cartesian3.add(
+          satCartesian,
+          Cesium.Cartesian3.multiplyByScalar(up, -vecLen * 0.85, new Cesium.Cartesian3()),
+          new Cesium.Cartesian3()
+        );
+        this.velocityVectorLine.positions = [satCartesian, velTip];
+        this.velocityVectorLine.show = true;
+        this.nadirVectorLine.positions = [satCartesian, nadirTip];
+        this.nadirVectorLine.show = true;
+        if (this.velocityLabel) {
+          this.velocityLabel.position = velTip;
+          this.velocityLabel.show = true;
+        }
+        if (this.nadirLabel) {
+          this.nadirLabel.position = nadirTip;
+          this.nadirLabel.show = true;
+        }
+      } else {
+        this.hideAttitudeVectors();
+      }
     } else {
       cached.model.show = false;
+      this.hideAttitudeVectors();
     }
 
     const isReadyAndVisible = shouldShow && cached.model.ready;

@@ -77,6 +77,8 @@ export class HudController {
   cacheDom() {
     const $ = (id) => document.getElementById(id);
     this.el = {
+      bootSplash: $('boot-splash'),
+      splashStatus: $('splash-status'),
       mobileBackdrop: $('mobile-backdrop'),
       leftDrawer: $('left-drawer'),
       drawerHandle: $('drawer-handle'),
@@ -100,6 +102,7 @@ export class HudController {
       toggleLighting: $('toggle-lighting'),
       toggleOrbit: $('toggle-orbit'),
       toggleFootprint: $('toggle-footprint'),
+      toggleVectors: $('toggle-vectors'),
       observerSelect: $('observer-select'),
       btnGeolocate: $('btn-geolocate'),
 
@@ -109,6 +112,8 @@ export class HudController {
 
       telemetryPanel: $('telemetry-panel'),
       telemetryHandle: $('telemetry-handle'),
+      btnFavorite: $('btn-favorite'),
+      btnShareSat: $('btn-share-sat'),
       btnToggleTelemetryExpand: $('btn-toggle-telemetry-expand'),
       btnCloseTelemetry: $('btn-close-telemetry'),
       telRegime: $('tel-regime'),
@@ -137,6 +142,11 @@ export class HudController {
       telEl: $('tel-el'),
       telRange: $('tel-range'),
       telPassBox: $('tel-pass-box'),
+
+      timeScrubberBar: $('time-scrubber-bar'),
+      timeScrubber: $('time-scrubber'),
+      scrubberOffsetLabel: $('scrubber-offset-label'),
+      btnScrubberToggle: $('btn-scrubber-toggle'),
 
       btnLiveNow: $('btn-live-now'),
       clockKst: $('clock-kst'),
@@ -179,6 +189,9 @@ export class HudController {
     setIcon('expand-icon', ICONS.list);
     this.el.btnCollapseDrawer.innerHTML = ICONS.chevronLeft;
     this.el.btnCloseTelemetry.innerHTML = ICONS.close;
+    if (this.el.btnFavorite) this.el.btnFavorite.innerHTML = ICONS.star;
+    if (this.el.btnShareSat) this.el.btnShareSat.innerHTML = ICONS.share;
+    if (this.el.btnScrubberToggle) this.el.btnScrubberToggle.innerHTML = ICONS.clock;
     if (this.el.btnCloseLayers) this.el.btnCloseLayers.innerHTML = ICONS.close;
     if (this.el.btnToggleTelemetryExpand) {
       this.el.btnToggleTelemetryExpand.innerHTML = ICONS.chevronUp;
@@ -187,6 +200,20 @@ export class HudController {
     document.querySelectorAll('.modal-close').forEach((btn) => {
       btn.innerHTML = ICONS.close;
     });
+  }
+
+  setSplashStatus(text) {
+    if (this.el.splashStatus) {
+      this.el.splashStatus.textContent = text;
+    }
+  }
+
+  hideBootSplash() {
+    if (!this.el.bootSplash) return;
+    this.el.bootSplash.classList.add('is-hidden');
+    setTimeout(() => {
+      if (this.el.bootSplash) this.el.bootSplash.hidden = true;
+    }, 360);
   }
 
   applyResponsiveInitialState() {
@@ -388,6 +415,9 @@ export class HudController {
     this.el.toggleFootprint.addEventListener('change', (e) => {
       this.cb.onToggleFootprint?.(e.target.checked);
     });
+    this.el.toggleVectors?.addEventListener('change', (e) => {
+      this.cb.onToggleVectors?.(e.target.checked);
+    });
 
     // Observer selector & GPS
     this.el.observerSelect.addEventListener('change', (e) => {
@@ -400,6 +430,12 @@ export class HudController {
     });
 
     // Telemetry controls & mobile bottom-sheet toggle/swipe
+    this.el.btnFavorite?.addEventListener('click', () => {
+      this.cb.onToggleFavorite?.();
+    });
+    this.el.btnShareSat?.addEventListener('click', () => {
+      this.cb.onShareSelected?.();
+    });
     this.el.btnCloseTelemetry.addEventListener('click', () => {
       this.setTelemetryExpanded(false);
       this.cb.onDeselectSatellite?.();
@@ -442,12 +478,34 @@ export class HudController {
       this.cb.onFlyToSelected?.();
     });
 
-    // Simulation controls
+    // Pass jump-to-time delegation
+    this.el.telPassBox?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.pass-jump-btn');
+      if (!btn) return;
+      const targetMs = Number(btn.dataset.timeMs);
+      if (Number.isFinite(targetMs)) {
+        this.cb.onJumpToTime?.(targetMs);
+        if (this.isMobile()) this.setTelemetryExpanded(false);
+      }
+    });
+
+    // Simulation controls & ±24h timeline scrubber
     this.el.btnLiveNow.addEventListener('click', () => {
       this.cb.onJumpToNow?.();
     });
     this.el.btnPlayPause.addEventListener('click', () => {
       this.cb.onTogglePlay?.();
+    });
+    this.el.btnScrubberToggle?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = this.el.timeScrubberBar.hidden;
+      this.el.timeScrubberBar.hidden = !willOpen;
+      this.el.btnScrubberToggle.classList.toggle('active', willOpen);
+    });
+    this.el.timeScrubber?.addEventListener('input', (e) => {
+      const mins = Number(e.target.value);
+      this.updateScrubberLabel(mins);
+      this.cb.onScrubOffsetMinutes?.(mins);
     });
     this.el.speedButtons.addEventListener('click', (e) => {
       const btn = e.target.closest('.speed-btn');
@@ -596,13 +654,57 @@ export class HudController {
     this.el.btnLiveNow.classList.toggle('is-live', isLive);
   }
 
+  updateScrubberLabel(offsetMinutes) {
+    if (!this.el.scrubberOffsetLabel) return;
+    const rounded = Math.round(offsetMinutes);
+    if (Math.abs(rounded) < 1) {
+      this.el.scrubberOffsetLabel.textContent = '실시간 (0분)';
+      return;
+    }
+    const sign = rounded > 0 ? '+' : '-';
+    const abs = Math.abs(rounded);
+    const h = Math.floor(abs / 60);
+    const m = abs % 60;
+    this.el.scrubberOffsetLabel.textContent =
+      h > 0 ? `${sign}${h}시간 ${String(m).padStart(2, '0')}분` : `${sign}${m}분`;
+  }
+
+  syncScrubberFromSimTime(simTimeMs) {
+    if (!this.el.timeScrubber || document.activeElement === this.el.timeScrubber) return;
+    const diffMin = Math.round((simTimeMs - Date.now()) / 60000);
+    const clamped = Math.max(-1440, Math.min(1440, diffMin));
+    this.el.timeScrubber.value = String(clamped);
+    this.updateScrubberLabel(diffMin);
+  }
+
   setFollowState(following) {
     this.el.btnFollow.classList.toggle('active', following);
     this.el.btnFollow.querySelector('span:last-child').textContent = following ? '추적 중' : '카메라 추적';
   }
 
-  set3dModelActiveState(is3dActive) {
+  setFavoriteState(isFav) {
+    if (!this.el.btnFavorite) return;
+    this.el.btnFavorite.classList.toggle('is-favorite', isFav);
+    this.el.btnFavorite.innerHTML = isFav ? ICONS.starFilled : ICONS.star;
+    this.el.btnFavorite.title = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+  }
+
+  set3dModelLoading(isLoading) {
+    this.is3dModelLoading = Boolean(isLoading);
     if (!this.el.telModelLod) return;
+    if (this.is3dModelLoading) {
+      this.el.telModelLod.classList.remove('active-3d');
+      this.el.telModelLod.classList.add('loading-3d');
+      this.el.telModelLod.textContent = '3D 모델 불러오는 중...';
+    } else {
+      this.el.telModelLod.classList.remove('loading-3d');
+      this.set3dModelActiveState(Boolean(this.last3dActive));
+    }
+  }
+
+  set3dModelActiveState(is3dActive) {
+    this.last3dActive = Boolean(is3dActive);
+    if (!this.el.telModelLod || this.is3dModelLoading) return;
     this.el.telModelLod.classList.toggle('active-3d', is3dActive);
     this.el.telModelLod.textContent = is3dActive ? '3D 실물 표시 중' : '줌인 시 3D 실물 표시';
   }
@@ -616,18 +718,24 @@ export class HudController {
       ? `${fmtClockKst(simDate, true)} KST`
       : `${fmtClockKst(simDate, false)} KST`;
     this.el.clockUtc.textContent = fmtClockUtc(simDate);
+    this.syncScrubberFromSimTime(simDate.getTime());
   }
 
-  renderSatelliteList(records, selectedId, positionsMap, totalCount) {
-    this.el.listCountText.textContent = `표시 ${records.length}기 / 전체 ${totalCount}기`;
+  renderSatelliteList(records, selectedId, positionsMap, totalCount, favoriteIds = new Set(), isFavoritesTab = false) {
+    this.el.listCountText.textContent = isFavoritesTab
+      ? `즐겨찾기 ${records.length}기`
+      : `표시 ${records.length}기 / 전체 ${totalCount}기`;
 
-    const idSig = records.map((r) => r.id).join(',');
+    const favSig = [...favoriteIds].sort((a, b) => a - b).join('.');
+    const idSig = `${records.map((r) => r.id).join(',')}|${favSig}|${isFavoritesTab ? '1' : '0'}`;
     if (idSig !== this.lastRenderedIds) {
       this.lastRenderedIds = idSig;
       this.listRowMap.clear();
 
       if (records.length === 0) {
-        this.el.satList.innerHTML = `<div class="empty-list">일치하는 위성이 없습니다.<br/>숫자 NORAD ID 입력 후 Enter로 실시간 조회할 수 있습니다.</div>`;
+        this.el.satList.innerHTML = isFavoritesTab
+          ? `<div class="empty-list">즐겨찾기한 위성이 아직 없습니다.<br/>위성 상세 패널의 ★ 버튼으로 관심 위성을 등록해 보세요.</div>`
+          : `<div class="empty-list">일치하는 위성이 없습니다.<br/>숫자 NORAD ID 입력 후 Enter로 실시간 조회할 수 있습니다.</div>`;
         return;
       }
 
@@ -635,6 +743,7 @@ export class HudController {
       for (const rec of records) {
         const info = getSatelliteDisplayInfo(rec.id, rec.name);
         const color = getCategoryColor(rec.group);
+        const isFav = favoriteIds.has(rec.id);
         const row = document.createElement('button');
         row.className = `sat-item${rec.id === selectedId ? ' selected' : ''}`;
         row.dataset.id = String(rec.id);
@@ -643,7 +752,7 @@ export class HudController {
           <div class="sat-item-left">
             <span class="sat-color-bar" style="background:${color}"></span>
             <div class="sat-item-info">
-              <div class="sat-item-name">${escapeHtml(info.title)}</div>
+              <div class="sat-item-name">${isFav ? '<span class="sat-fav-star">★</span> ' : ''}${escapeHtml(info.title)}</div>
               <div class="sat-item-meta">
                 <span class="mono">#${rec.id}</span>
                 <span>·</span>
@@ -681,13 +790,14 @@ export class HudController {
     }
   }
 
-  updateTelemetry(record, pos, look, observer, passInfo) {
+  updateTelemetry(record, pos, look, observer, passInfo, isFav = false) {
     if (!record || !pos) {
       this.el.telemetryPanel.hidden = true;
       return;
     }
 
     this.el.telemetryPanel.hidden = false;
+    this.setFavoriteState(isFav);
     const info = getSatelliteDisplayInfo(record.id, record.name);
 
     this.el.telRegime.textContent = record.regime;
@@ -741,6 +851,12 @@ export class HudController {
   }
 
   renderPassInfo(pass) {
+    const sig = pass
+      ? `${pass.status}|${pass.aos ? pass.aos.getTime() : 0}|${pass.passes?.length || 0}|${Math.round(pass.maxElevationDeg || 0)}`
+      : 'null';
+    if (sig === this.lastPassSig) return;
+    this.lastPassSig = sig;
+
     if (!pass || pass.status === 'UNAVAILABLE') {
       this.el.telPassBox.textContent = '통과 예측 정보를 계산할 수 없습니다.';
       return;
@@ -754,17 +870,38 @@ export class HudController {
       return;
     }
     if (pass.status === 'NO_PASS_24H') {
-      this.el.telPassBox.textContent = '향후 24시간 내 관측소 상공 통과 예정이 없습니다.';
+      this.el.telPassBox.textContent = '향후 48시간 내 관측소 상공 통과 예정이 없습니다.';
       return;
     }
 
-    const prefix = pass.status === 'VISIBLE_NOW' ? '현재 상공 통과 중' : '다음 상공 통과 예정';
-    const aosStr = pass.aos ? fmtKstTime(pass.aos) : '--';
-    const losStr = pass.los ? fmtKstTime(pass.los) : '--';
+    const list = Array.isArray(pass.passes) && pass.passes.length > 0 ? pass.passes : [pass];
     this.el.telPassBox.innerHTML = `
-      <div><strong>${prefix}</strong> · 최대 고도각 <strong>${pass.maxElevationDeg.toFixed(1)}°</strong></div>
-      <div class="mono" style="margin-top:3px;font-size:11px;">
-        AOS ${aosStr} → LOS ${losStr} (KST)
+      <div class="pass-list-heading">향후 48시간 상공 통과 일정 (${list.length}회)</div>
+      <div class="pass-list">
+        ${list
+          .map((item, idx) => {
+            const isNow = item.status === 'VISIBLE_NOW';
+            const aosStr = item.aos ? fmtKstTime(item.aos) : '--';
+            const durMin = item.durationSec ? `${Math.max(1, Math.round(item.durationSec / 60))}분` : '';
+            const jumpMs = item.aos ? item.aos.getTime() : 0;
+            return `
+              <div class="pass-row${idx === 0 ? ' is-next' : ''}">
+                <div class="pass-row-info">
+                  <div class="pass-row-top">
+                    <span class="pass-tag${isNow ? ' live' : ''}">${isNow ? '통과 중' : `#${idx + 1}`}</span>
+                    <span class="pass-el">최대 <strong>${item.maxElevationDeg.toFixed(0)}°</strong>${durMin ? ` · ${durMin}` : ''}</span>
+                  </div>
+                  <div class="pass-time mono">${aosStr} KST</div>
+                </div>
+                ${
+                  jumpMs
+                    ? `<button class="pass-jump-btn" data-time-ms="${jumpMs}" title="이 통과 시각으로 시뮬레이션 이동">이동</button>`
+                    : ''
+                }
+              </div>
+            `;
+          })
+          .join('')}
       </div>
     `;
   }

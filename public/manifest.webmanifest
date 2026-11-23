@@ -1,14 +1,40 @@
 {
-  "name": "OrbitPulse 3D",
-  "short_name": "OrbitPulse",
-  "description": "실시간 인공위성 3D 구글 지도 트래커",
-  "icons": [
-    {"src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
-    {"src": "./icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}
-  ],
-  "start_url": ".",
+  "id": "./",
+  "name": "OrbitPulse 3D — 실시간 인공위성 3D 추적기",
+  "short_name": "OrbitPulse 3D",
+  "description": "CelesTrak 실시간 궤도 요소와 SGP4 엔진으로 ISS, 아리랑, 천리안, 허블 등 실제 인공위성을 3D 구글 지도 위에서 실시간 추적합니다.",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a"
+  "orientation": "any",
+  "background_color": "#05080f",
+  "theme_color": "#05080f",
+  "lang": "ko",
+  "categories": ["education", "navigation", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
 }

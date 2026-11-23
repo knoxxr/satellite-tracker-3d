@@ -23,6 +23,16 @@
 </head>
 <body>
   <main id="app" class="app-shell">
+    <!-- Initial Boot Splash (fades out once 3D globe & orbital data are ready) -->
+    <div id="boot-splash" class="boot-splash" role="status" aria-live="polite">
+      <div class="splash-card">
+        <img src="./icons/icon-192.png" alt="OrbitPulse 3D" class="splash-icon" width="64" height="64" />
+        <div class="splash-title">OrbitPulse 3D</div>
+        <div id="splash-status" class="splash-status">3D 지구본 및 실시간 궤도 엔진 준비 중...</div>
+        <div class="splash-progress"><div class="splash-progress-bar"></div></div>
+      </div>
+    </div>
+
     <!-- 3D Viewport Containers -->
     <div id="cesium-container" class="viewport-canvas" aria-label="3D 지구본 및 Google Photorealistic 3D Tiles 뷰포트"></div>
     <div id="gmaps3d-container" class="viewport-canvas" style="display: none;" aria-label="Google Maps 3D 네이티브 뷰포트"></div>
@@ -146,6 +156,10 @@
             <span>지상 커버리지 및 직하선</span>
             <input id="toggle-footprint" type="checkbox" checked />
           </label>
+          <label class="toggle-row">
+            <span>근접 시 진행·지구 방향 화살표</span>
+            <input id="toggle-vectors" type="checkbox" checked />
+          </label>
         </div>
 
         <div class="popover-section">
@@ -175,6 +189,8 @@
           <p id="tel-original-name" class="telemetry-sub"></p>
         </div>
         <div class="telemetry-header-btns">
+          <button id="btn-favorite" class="icon-btn fav-btn" title="즐겨찾기 추가/해제" aria-label="즐겨찾기 추가 또는 해제"></button>
+          <button id="btn-share-sat" class="icon-btn" title="위성 추적 링크 복사" aria-label="위성 추적 링크 복사"></button>
           <button id="btn-toggle-telemetry-expand" class="icon-btn mobile-only" title="상세 정보 펼치기/접기" aria-label="상세 정보 펼치기 또는 접기"></button>
           <button id="btn-close-telemetry" class="icon-btn" title="패널 닫기" aria-label="패널 닫기"></button>
         </div>
@@ -265,6 +281,19 @@
       </div>
     </section>
 
+    <!-- Timeline Scrubber Popover (±24h) -->
+    <div id="time-scrubber-bar" class="hud-panel time-scrubber-bar" hidden aria-label="±24시간 궤도 타임라인 탐색">
+      <div class="scrubber-head">
+        <span class="scrubber-title">타임라인 탐색 (±24시간)</span>
+        <span id="scrubber-offset-label" class="scrubber-offset mono">실시간 (0분)</span>
+      </div>
+      <div class="scrubber-row">
+        <span class="scrubber-bound mono">-24h</span>
+        <input id="time-scrubber" type="range" min="-1440" max="1440" step="5" value="0" aria-label="시뮬레이션 시간 오프셋 (분)" />
+        <span class="scrubber-bound mono">+24h</span>
+      </div>
+    </div>
+
     <!-- Bottom Floating Time & Simulation Control Bar -->
     <footer class="bottom-bar hud-panel" aria-label="실시간 시뮬레이션 시간 제어">
       <div class="clock-block">
@@ -280,6 +309,7 @@
 
       <div class="sim-controls">
         <button id="btn-play-pause" class="icon-btn" title="재생 / 일시정지" aria-label="재생 또는 일시정지"></button>
+        <button id="btn-scrubber-toggle" class="icon-btn" title="±24시간 타임라인 탐색" aria-label="타임라인 슬라이더 열기"></button>
         <button id="btn-speed-cycle" class="speed-cycle-btn mono mobile-only" title="시간 배속 전환" aria-label="시간 배속 전환">1×</button>
         <div id="speed-buttons" class="speed-group" role="group" aria-label="시간 배속">
           <button class="speed-btn active" data-speed="1">1×</button>

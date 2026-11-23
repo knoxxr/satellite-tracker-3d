@@ -16,9 +16,13 @@ const GROUP_CONFIG = {
       `${CELESTRAK_BASE}?NAME=NEXTSAT&FORMAT=json`,
       `${CELESTRAK_BASE}?NAME=NEONSAT&FORMAT=json`,
       `${CELESTRAK_BASE}?NAME=STSAT-&FORMAT=json`,
+      `${CELESTRAK_BASE}?CATNR=43823&FORMAT=json`,
+      `${CELESTRAK_BASE}?CATNR=45246&FORMAT=json`,
     ],
     fallback: 'korea.json',
     filter: (item) => {
+      const id = Number(item.NORAD_CAT_ID);
+      if (id === 43823 || id === 45246) return true;
       const name = String(item.OBJECT_NAME || '').toUpperCase();
       if (name.includes('DEB') || name.includes('R/B')) return false;
       return (
@@ -28,6 +32,7 @@ const GROUP_CONFIG = {
         name.includes('CAS500') ||
         name.includes('NEXTSAT') ||
         name.includes('NEONSAT') ||
+        name.includes('GK-2') ||
         name.startsWith('STSAT')
       );
     },
@@ -150,8 +155,10 @@ async function fetchSingleGroupClient(groupName, forceRefresh = false) {
   }
 
   try {
-    const batches = await Promise.all(config.urls.map((u) => fetchJsonArray(u)));
-    const merged = batches.flat();
+    const settled = await Promise.allSettled(config.urls.map((u) => fetchJsonArray(u, 6500)));
+    const merged = settled
+      .filter((r) => r.status === 'fulfilled' && Array.isArray(r.value))
+      .flatMap((r) => r.value);
     if (!merged.length) throw new Error('Empty response from CelesTrak');
     const cleaned = dedupeAndTag(merged, groupName, config.filter, config.limit);
     const entry = {
