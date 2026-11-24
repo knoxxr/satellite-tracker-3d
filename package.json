@@ -7,7 +7,8 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "sync:data": "node scripts/sync_celestrak_snapshot.mjs"
   },
   "dependencies": {
     "cesium": "^1.147.0",

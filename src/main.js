@@ -308,7 +308,13 @@ class OrbitPulseApp {
       this.forceFullPositionSync = true;
       this.renderFilteredList();
 
-      const srcLabel = payload.source === 'celestrak-live' ? 'CelesTrak 실시간' : '로컬 스냅샷';
+      const srcLabelMap = {
+        'cdn-snapshot': 'CDN 공유 스냅샷',
+        'server-cache': '서버 공유 캐시',
+        'celestrak-live': 'CelesTrak 실시간',
+        'fallback-snapshot': '로컬 스냅샷',
+      };
+      const srcLabel = srcLabelMap[payload.source] || '로컬 스냅샷';
       const timeStr = new Intl.DateTimeFormat('ko-KR', {
         timeZone: 'Asia/Seoul',
         hour: '2-digit',

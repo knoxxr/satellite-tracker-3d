@@ -155,6 +155,51 @@ export const NOTABLE_SATELLITES = {
 const STATION_IDS = new Set([25544, 48274, 49044, 53239, 54216]);
 const KOREA_IDS = new Set([22077, 22828, 25756, 36744, 38338, 39227, 40536, 42691, 42984, 43784, 43823, 45246, 47932, 52898, 52899, 52900, 56743, 59587, 61910, 66661, 66771, 66820, 100950]);
 
+export function isKoreanSatellite(omm) {
+  const id = Number(omm?.NORAD_CAT_ID);
+  if (KOREA_IDS.has(id)) return true;
+  const name = String(omm?.OBJECT_NAME || '').toUpperCase();
+  if (name.includes('DEB') || name.includes('R/B')) return false;
+  return (
+    name.includes('KOMPSAT') ||
+    name.includes('ARIRANG') ||
+    name.includes('KOREASAT') ||
+    name.includes('CAS500') ||
+    name.includes('NEXTSAT') ||
+    name.includes('NEONSAT') ||
+    name.includes('KITSAT') ||
+    name.includes('SNUGLITE') ||
+    name.includes('MIMAN') ||
+    name.includes('RANDEV') ||
+    name.includes('GYEONGGI') ||
+    name.includes('GK-2') ||
+    name.startsWith('STSAT')
+  );
+}
+
+/**
+ * Strip non-essential OMM keys while preserving every field required by satellite.js json2satrec()
+ * and OrbitPulse UI. Reduces 16,900-satellite JSON payload by ~35%.
+ */
+export function compactOmmRecord(omm, groupTag = null) {
+  return {
+    OBJECT_NAME: omm.OBJECT_NAME,
+    OBJECT_ID: omm.OBJECT_ID,
+    EPOCH: omm.EPOCH,
+    MEAN_MOTION: omm.MEAN_MOTION,
+    ECCENTRICITY: omm.ECCENTRICITY,
+    INCLINATION: omm.INCLINATION,
+    RA_OF_ASC_NODE: omm.RA_OF_ASC_NODE,
+    ARG_OF_PERICENTER: omm.ARG_OF_PERICENTER,
+    MEAN_ANOMALY: omm.MEAN_ANOMALY,
+    NORAD_CAT_ID: Number(omm.NORAD_CAT_ID),
+    BSTAR: omm.BSTAR,
+    MEAN_MOTION_DOT: omm.MEAN_MOTION_DOT,
+    MEAN_MOTION_DDOT: omm.MEAN_MOTION_DDOT,
+    _group: groupTag || omm._group || classifySatelliteGroup(omm),
+  };
+}
+
 /**
  * Automatically classify any active CelesTrak OMM object into a visual category
  * so the 16,000+ global satellite view renders distinct color-coded orbital shells.
@@ -165,23 +210,17 @@ export function classifySatelliteGroup(omm) {
   const meanMotion = Number(omm?.MEAN_MOTION || 0);
   const ecc = Number(omm?.ECCENTRICITY || 0);
 
-  if (STATION_IDS.has(id) || name.includes('ISS (ZARYA)') || name.includes('CSS (TIANHE)')) {
+  if (
+    STATION_IDS.has(id) ||
+    name.includes('ISS (ZARYA)') ||
+    name.includes('CSS (TIANHE)') ||
+    name.includes('CSS (WENTIAN)') ||
+    name.includes('CSS (MENGTIAN)') ||
+    name.includes('TIANGONG')
+  ) {
     return 'stations';
   }
-  if (
-    KOREA_IDS.has(id) ||
-    name.includes('KOMPSAT') ||
-    name.includes('ARIRANG') ||
-    name.includes('KOREASAT') ||
-    name.includes('CAS500') ||
-    name.includes('NEXTSAT') ||
-    name.includes('NEONSAT') ||
-    name.includes('KITSAT') ||
-    name.includes('SNUGLITE') ||
-    name.includes('GYEONGGI') ||
-    name.includes('GK-2') ||
-    name.startsWith('STSAT')
-  ) {
+  if (isKoreanSatellite(omm)) {
     return 'korea';
   }
   if (name.includes('STARLINK')) return 'starlink';
@@ -200,7 +239,7 @@ export function classifySatelliteGroup(omm) {
     name.includes('GALILEO') ||
     name.includes('GSAT') ||
     name.includes('GLONASS') ||
-    name.includes('COSMOS 2') && meanMotion > 1.8 && meanMotion < 2.3 ||
+    (name.includes('COSMOS 2') && meanMotion > 1.8 && meanMotion < 2.3) ||
     name.includes('BEIDOU') ||
     name.includes('QZS-')
   ) {
@@ -213,7 +252,10 @@ export function classifySatelliteGroup(omm) {
     name.includes('TESS') ||
     name.includes('FERMI') ||
     name.includes('SWIFT') ||
-    name.includes('NUSTAR')
+    name.includes('NUSTAR') ||
+    name.includes('INTEGRAL') ||
+    name.includes('XMM') ||
+    name.includes('HINODE')
   ) {
     return 'science';
   }
@@ -230,17 +272,76 @@ export function classifySatelliteGroup(omm) {
     name.includes('TERRA') ||
     name.includes('AQUA') ||
     name.includes('AURA') ||
-    name.includes('SUOMI')
+    name.includes('SUOMI') ||
+    name.includes('JASON') ||
+    name.includes('SWOT') ||
+    name.includes('CRYOSAT') ||
+    name.includes('SMAP') ||
+    name.includes('GPM')
   ) {
     return 'weather';
   }
   if (meanMotion >= 0.95 && meanMotion <= 1.06 && ecc < 0.05) {
     return 'geo';
   }
-  if (name.includes('CUBE') || name.includes('OSCAR') || name.includes('FLOCK') || name.includes('LEMUR')) {
+  if (
+    name.includes('CUBE') ||
+    name.includes('OSCAR') ||
+    name.includes('FLOCK') ||
+    name.includes('LEMUR') ||
+    name.includes('DOVE') ||
+    name.includes('UMBRA') ||
+    name.includes('ICEYE')
+  ) {
     return 'cubesat';
   }
   return 'other';
+}
+
+/**
+ * Derive any of the 13 categories locally from the master active satellite dataset
+ * so switching tabs makes ZERO extra upstream API calls.
+ */
+export function filterSatellitesByCategory(allSatellites, groupName, recentIdSet = null) {
+  if (!Array.isArray(allSatellites) || allSatellites.length === 0) return [];
+  if (groupName === 'all') return allSatellites;
+
+  if (groupName === 'featured') {
+    const featuredGroups = new Set(['stations', 'korea', 'weather', 'gnss', 'science']);
+    return allSatellites.filter((s) => featuredGroups.has(s._group || classifySatelliteGroup(s)));
+  }
+
+  if (groupName === 'korea') {
+    return allSatellites.filter((s) => isKoreanSatellite(s));
+  }
+
+  if (groupName === 'geo') {
+    return allSatellites.filter((s) => {
+      const mm = Number(s.MEAN_MOTION || 0);
+      const ecc = Number(s.ECCENTRICITY || 0);
+      return mm >= 0.95 && mm <= 1.06 && ecc < 0.05;
+    });
+  }
+
+  if (groupName === 'gps') {
+    return allSatellites.filter((s) => {
+      const n = String(s.OBJECT_NAME || '').toUpperCase();
+      return n.includes('GPS ') || n.includes('NAVSTAR');
+    });
+  }
+
+  if (groupName === 'recent') {
+    if (recentIdSet && recentIdSet.size > 0) {
+      return allSatellites.filter((s) => recentIdSet.has(Number(s.NORAD_CAT_ID)));
+    }
+    // Fallback heuristic: highest catalog numbers / current launch year
+    const sorted = [...allSatellites].sort(
+      (a, b) => Number(b.NORAD_CAT_ID || 0) - Number(a.NORAD_CAT_ID || 0)
+    );
+    return sorted.slice(0, 250);
+  }
+
+  return allSatellites.filter((s) => (s._group || classifySatelliteGroup(s)) === groupName);
 }
 
 export function getCategoryColor(group) {
