@@ -5,6 +5,7 @@ import {
   OBSERVER_PRESETS,
   getCategoryColor,
   getLaunchSiteLabel,
+  getObserverPresetName,
   getOwnerLabel,
   getSatelliteDisplayInfo,
 } from './orbital/catalog.js';
@@ -19,6 +20,7 @@ import {
 } from './orbital/propagator.js';
 import { fetchSatelliteByNoradId, fetchSatelliteGroup, searchSatellitesByName } from './orbital/dataService.js';
 import { HudController } from './ui/hud.js';
+import { getLang, t, toggleLang } from './ui/i18n.js';
 
 const STORAGE_KEY_GMAPS = 'orbitpulse_google_maps_api_key';
 const STORAGE_KEY_FAVORITES = 'orbitpulse_favorites_v1';
@@ -86,6 +88,7 @@ class OrbitPulseApp {
     this.cachedPassInfo = null;
     this.cachedPassMeta = { id: null, observerKey: '', computedAtSimMs: 0 };
     this.lastUiUpdateMs = 0;
+    this.lastSyncMeta = null;
 
     this.cesiumContainer = document.getElementById('cesium-container');
     this.gmapsContainer = document.getElementById('gmaps3d-container');
@@ -111,6 +114,7 @@ class OrbitPulseApp {
     this.gmapsInitialized = false;
 
     this.hud = new HudController({
+      onToggleLanguage: () => this.handleLanguageToggle(),
       onCategoryChange: (cat) => this.handleCategoryChange(cat),
       onSearchChange: (q) => {
         this.state.searchQuery = q;
@@ -158,13 +162,56 @@ class OrbitPulseApp {
     });
   }
 
+  getEngineSubtitle(engineId) {
+    if (engineId === 'google-tiles') return t('subtitleGoogleTiles');
+    if (engineId === 'google-native') return t('subtitleGoogleNative');
+    return t('subtitleGlobe');
+  }
+
+  renderSyncStatus() {
+    if (!this.lastSyncMeta) return;
+    const { source, updatedAt, count } = this.lastSyncMeta;
+    const srcKeyMap = {
+      'cdn-snapshot': 'srcCdn',
+      'server-cache': 'srcServer',
+      'celestrak-live': 'srcLive',
+      'fallback-snapshot': 'srcFallback',
+    };
+    const srcLabel = t(srcKeyMap[source] || 'srcFallback');
+    const lang = getLang();
+    const timeStr = new Intl.DateTimeFormat(lang === 'ko' ? 'ko-KR' : 'en-US', {
+      ...(lang === 'ko' ? { timeZone: 'Asia/Seoul' } : {}),
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date(updatedAt || Date.now()));
+    const unit = lang === 'ko' ? '기' : ' sats';
+    this.hud.setSyncStatus(`${srcLabel} · ${count.toLocaleString()}${unit} (${timeStr})`);
+  }
+
+  handleLanguageToggle() {
+    toggleLang();
+    this.hud.refreshLanguage(this.state.category, this.state.observer?.id);
+    this.hud.setActiveEngine(this.state.activeEngine, this.getEngineSubtitle(this.state.activeEngine));
+    this.cesiumEngine.refreshLanguageLabels();
+    this.renderSyncStatus();
+    this.renderFilteredList();
+    this.hud.updateClock(new Date(this.state.simTimeMs));
+    if (this.state.selectedId) {
+      this.updateTelemetryPanel();
+    }
+    if (this.state.hoveredId) {
+      this.updateHoverTooltip();
+    }
+  }
+
   async start() {
-    this.hud.setSplashStatus('3D 지구본 초기화 중...');
+    this.hud.setSplashStatus(t('splashInitGlobe'));
     this.cesiumEngine.init();
     this.cesiumEngine.setObserver(this.state.observer);
     this.hud.setApiKeyState(Boolean(this.state.googleApiKey));
 
-    this.hud.setSplashStatus('전 세계 무료 공개 인공위성 전체 동기화 중...');
+    this.hud.setSplashStatus(t('splashSyncingAll'));
     const splashTimer = setTimeout(() => this.hud.hideBootSplash(), 3200);
     await this.loadCategory('all', false);
     clearTimeout(splashTimer);
@@ -181,7 +228,7 @@ class OrbitPulseApp {
     this.hud.hideBootSplash();
 
     if (this.state.googleApiKey) {
-      this.hud.toast('Google API 키가 감지되었습니다. 상단에서 Google 3D Tiles 또는 Google Maps 3D로 전환할 수 있습니다.', 'info');
+      this.hud.toast(t('toastApiDetected'), 'info');
     }
 
     this.registerServiceWorker();
@@ -268,14 +315,18 @@ class OrbitPulseApp {
       this.filteredRecordsCache = all;
     } else {
       this.filteredRecordsCache = all.filter((rec) => {
-        const info = getSatelliteDisplayInfo(rec.id, rec.name);
-        const ownerText = rec.owner ? `${rec.owner} ${getOwnerLabel(rec.owner)}`.toLowerCase() : '';
+        const infoEn = getSatelliteDisplayInfo(rec.id, rec.name, 'en');
+        const infoKo = getSatelliteDisplayInfo(rec.id, rec.name, 'ko');
+        const ownerText = rec.owner
+          ? `${rec.owner} ${getOwnerLabel(rec.owner, 'en')} ${getOwnerLabel(rec.owner, 'ko')}`.toLowerCase()
+          : '';
         const siteText = rec.launchSite
-          ? `${rec.launchSite} ${getLaunchSiteLabel(rec.launchSite)}`.toLowerCase()
+          ? `${rec.launchSite} ${getLaunchSiteLabel(rec.launchSite, 'en')} ${getLaunchSiteLabel(rec.launchSite, 'ko')}`.toLowerCase()
           : '';
         return (
           rec.name.toLowerCase().includes(q) ||
-          info.title.toLowerCase().includes(q) ||
+          infoEn.title.toLowerCase().includes(q) ||
+          infoKo.title.toLowerCase().includes(q) ||
           String(rec.id).includes(q) ||
           rec.regime.toLowerCase().includes(q) ||
           ownerText.includes(q) ||
@@ -299,7 +350,7 @@ class OrbitPulseApp {
       this.state.category = categoryId;
     }
     this.state.dataGroup = categoryId;
-    this.hud.setSyncStatus('CelesTrak 동기화 중...');
+    this.hud.setSyncStatus(t('syncWorking'));
 
     try {
       const payload = await fetchSatelliteGroup(categoryId, forceRefresh);
@@ -317,27 +368,19 @@ class OrbitPulseApp {
       this.forceFullPositionSync = true;
       this.renderFilteredList();
 
-      const srcLabelMap = {
-        'cdn-snapshot': 'CDN 공유 스냅샷',
-        'server-cache': '서버 공유 캐시',
-        'celestrak-live': 'CelesTrak 실시간',
-        'fallback-snapshot': '로컬 스냅샷',
+      this.lastSyncMeta = {
+        source: payload.source,
+        updatedAt: payload.updatedAt || Date.now(),
+        count: this.allRecordsCache.length,
       };
-      const srcLabel = srcLabelMap[payload.source] || '로컬 스냅샷';
-      const timeStr = new Intl.DateTimeFormat('ko-KR', {
-        timeZone: 'Asia/Seoul',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).format(new Date(payload.updatedAt || Date.now()));
-      this.hud.setSyncStatus(`${srcLabel} · ${this.allRecordsCache.length.toLocaleString()}기 (${timeStr})`);
+      this.renderSyncStatus();
 
       if (forceRefresh) {
-        this.hud.toast(`최신 궤도 요소 ${parsed.length.toLocaleString()}기를 동기화했습니다.`, 'success');
+        this.hud.toast(t('toastSynced', { count: parsed.length.toLocaleString() }), 'success');
       }
     } catch (err) {
-      this.hud.setSyncStatus('데이터 로드 오류');
-      this.hud.toast(`위성 데이터 로드 실패: ${err.message}`, 'error');
+      this.hud.setSyncStatus(t('syncError'));
+      this.hud.toast(t('toastLoadFail', { msg: err.message }), 'error');
     }
   }
 
@@ -392,7 +435,12 @@ class OrbitPulseApp {
     if (this.state.followMode) {
       const pos = this.positionsMap.get(this.state.selectedId);
       if (pos) this.getActiveEngineInstance().flyToSatellite(pos, 0.9);
-      this.hud.toast('선택된 위성에 카메라를 고정했습니다.', 'info');
+      this.hud.toast(
+        getLang() === 'ko'
+          ? '선택된 위성에 카메라를 고정했습니다.'
+          : 'Camera locked onto selected satellite.',
+        'info'
+      );
     }
   }
 
@@ -405,9 +453,14 @@ class OrbitPulseApp {
     this.state.followMode = true;
     this.hud.setFollowState(true);
     await this.getActiveEngineInstance().flyToCloseup(pos, rec);
-    const hint = this.hud.isMobile()
-      ? '3D 위성 근접 보기 — 한 손가락 드래그로 360° 회전, 두 손가락으로 줌 조절할 수 있습니다.'
-      : '3D 위성 근접 보기 활성화 — 드래그로 360° 회전, 스크롤로 줌 조절할 수 있습니다.';
+    const hint =
+      getLang() === 'ko'
+        ? this.hud.isMobile()
+          ? '3D 위성 근접 보기 — 한 손가락 드래그로 360° 회전, 두 손가락으로 줌 조절할 수 있습니다.'
+          : '3D 위성 근접 보기 활성화 — 드래그로 360° 회전, 스크롤로 줌 조절할 수 있습니다.'
+        : this.hud.isMobile()
+          ? '3D close-up active — drag with one finger to orbit 360°, pinch to zoom.'
+          : '3D close-up active — drag to orbit 360°, scroll to zoom.';
     this.hud.toast(hint, 'info');
   }
 
@@ -431,40 +484,40 @@ class OrbitPulseApp {
       this.gmapsEngine.hide();
       this.cesiumEngine.show();
       this.state.activeEngine = 'globe';
-      this.hud.setActiveEngine('globe', '실시간 SGP4 · 3D 구글 위성 지구본');
+      this.hud.setActiveEngine('globe', this.getEngineSubtitle('globe'));
       return;
     }
 
     if (!this.state.googleApiKey) {
       this.hud.openApiKeyModal('', targetEngine);
-      this.hud.toast('Google 3D 지도 엔진을 사용하려면 Google Maps API 키를 입력해 주세요.', 'info');
+      this.hud.toast(t('errApiKeyRequired'), 'info');
       return;
     }
 
     if (targetEngine === 'google-tiles') {
       this.gmapsEngine.hide();
       this.cesiumEngine.show();
-      this.hud.toast('Google Photorealistic 3D Tiles를 불러오는 중...', 'info');
+      this.hud.toast(t('toastEngTilesLoading'), 'info');
       const res = await this.cesiumEngine.setGooglePhotorealistic3D(true, this.state.googleApiKey);
       if (!res.ok) {
         this.hud.toast(res.error, 'error');
-        this.hud.setActiveEngine('globe', '실시간 SGP4 · 3D 구글 위성 지구본');
+        this.hud.setActiveEngine('globe', this.getEngineSubtitle('globe'));
         this.state.activeEngine = 'globe';
         return;
       }
       this.state.activeEngine = 'google-tiles';
-      this.hud.setActiveEngine('google-tiles', '실시간 SGP4 · Google Photorealistic 3D Tiles');
-      this.hud.toast('Google Photorealistic 3D Tiles가 활성화되었습니다!', 'success');
+      this.hud.setActiveEngine('google-tiles', this.getEngineSubtitle('google-tiles'));
+      this.hud.toast(t('toastEngTilesReady'), 'success');
       return;
     }
 
     if (targetEngine === 'google-native') {
       try {
-        this.hud.toast('Google Maps 3D 네이티브 엔진을 초기화하는 중...', 'info');
+        this.hud.toast(t('toastEngNativeLoading'), 'info');
         if (!this.gmapsInitialized) {
           await this.gmapsEngine.init(this.state.googleApiKey);
           this.gmapsInitialized = true;
-          this.gmapsEngine.setSatellites(this.getAllRecords());
+          this.gmapsEngine.setSatellites(this.getAllRecords().slice(0, 300));
           this.gmapsEngine.setOrbitVisible(this.state.showOrbit);
           if (this.state.selectedId) {
             this.gmapsEngine.setSelected(this.state.selectedId);
@@ -473,18 +526,18 @@ class OrbitPulseApp {
         this.cesiumEngine.hide();
         this.gmapsEngine.show();
         this.state.activeEngine = 'google-native';
-        this.hud.setActiveEngine('google-native', '실시간 SGP4 · Google Maps 3D (<gmp-map-3d>)');
+        this.hud.setActiveEngine('google-native', this.getEngineSubtitle('google-native'));
         if (this.state.selectedId && this.cachedOrbitTrack) {
           const rec = this.getAllRecords().find((r) => r.id === this.state.selectedId);
           this.gmapsEngine.updateOrbitTrack(this.cachedOrbitTrack, getCategoryColor(rec?.group));
         }
-        this.hud.toast('Google Maps 3D 네이티브 엔진이 활성화되었습니다!', 'success');
+        this.hud.toast(t('toastEngNativeReady'), 'success');
       } catch (err) {
-        this.hud.toast(err.message, 'error');
+        this.hud.toast(t('toastEngNativeFail', { msg: err.message }), 'error');
         this.cesiumEngine.show();
         this.gmapsEngine.hide();
         this.state.activeEngine = 'globe';
-        this.hud.setActiveEngine('globe', '실시간 SGP4 · 3D 구글 위성 지구본');
+        this.hud.setActiveEngine('globe', this.getEngineSubtitle('globe'));
       }
     }
   }
@@ -494,13 +547,13 @@ class OrbitPulseApp {
     if (key) {
       localStorage.setItem(STORAGE_KEY_GMAPS, key);
       this.hud.setApiKeyState(true);
-      this.hud.toast('Google Maps API 키가 저장되었습니다.', 'success');
+      this.hud.toast(t('toastApiSaved'), 'success');
       await this.switchEngine(pendingEngine || 'google-tiles');
     } else {
       localStorage.removeItem(STORAGE_KEY_GMAPS);
       this.hud.setApiKeyState(false);
       await this.switchEngine('globe');
-      this.hud.toast('API 키가 삭제되어 기본 3D 지구본 모드로 전환되었습니다.', 'info');
+      this.hud.toast(t('toastApiCleared'), 'info');
     }
   }
 
@@ -509,28 +562,40 @@ class OrbitPulseApp {
     this.cesiumEngine.setObserver(observer);
     this.refreshSelectedPassInfo(true);
     this.updateTelemetryPanel();
-    this.hud.toast(`지상 관측소 기준이 "${observer.name}"(으)로 변경되었습니다.`, 'info');
+    const obsLabel = getObserverPresetName(observer, getLang());
+    this.hud.toast(
+      getLang() === 'ko'
+        ? `지상 관측소 기준이 "${obsLabel}"(으)로 변경되었습니다.`
+        : `Observer station set to "${obsLabel}".`,
+      'info'
+    );
   }
 
   requestUserLocation() {
     if (!navigator.geolocation) {
-      this.hud.toast('이 브라우저에서는 위치 정보(GPS)를 지원하지 않습니다.', 'error');
+      this.hud.toast(t('toastGeoUnsupported'), 'error');
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        const coordsStr = `${pos.coords.latitude.toFixed(2)}°, ${pos.coords.longitude.toFixed(2)}°`;
         const customObs = {
           id: 'gps',
-          name: `내 위치 (${pos.coords.latitude.toFixed(2)}°, ${pos.coords.longitude.toFixed(2)}°)`,
+          name: `My Location (${coordsStr})`,
+          nameEn: `My Location (${coordsStr})`,
+          nameKo: `내 위치 (${coordsStr})`,
+          shortEn: 'My GPS',
+          shortKo: '내 위치',
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
           heightKm: (pos.coords.altitude || 30) / 1000,
         };
+        this.hud.renderObserverPresets('gps');
         this.setObserver(customObs);
         this.cesiumEngine.flyToObserver(customObs);
       },
-      () => {
-        this.hud.toast('위치 권한을 가져오지 못했습니다. 목록에서 도시를 선택해 주세요.', 'error');
+      (err) => {
+        this.hud.toast(t('toastGeoDenied', { msg: err?.message || 'Permission denied' }), 'error');
       }
     );
   }
@@ -538,14 +603,14 @@ class OrbitPulseApp {
   async lookupNoradSatellite(noradId, closeModal = false) {
     const clean = String(noradId).replace(/\D/g, '');
     if (!clean) {
-      this.hud.toast('올바른 숫자 NORAD ID를 입력해 주세요.', 'error');
+      this.hud.toast(t('errInvalidNorad'), 'error');
       return;
     }
     try {
-      this.hud.toast(`CelesTrak에서 NORAD #${clean} 조회 중...`, 'info');
+      this.hud.toast(t('toastNoradSearching', { id: clean }), 'info');
       const omm = await fetchSatelliteByNoradId(clean);
       const rec = buildRecordFromOmm(omm);
-      if (!rec) throw new Error('궤도 요소 초기화에 실패했습니다.');
+      if (!rec) throw new Error(t('errInvalidTleParse'));
 
       this.state.customRecords = [
         ...this.state.customRecords.filter((r) => r.id !== rec.id),
@@ -557,9 +622,9 @@ class OrbitPulseApp {
       this.forceFullPositionSync = true;
       this.selectSatellite(rec.id, true);
       if (closeModal) this.hud.closeAddModal();
-      this.hud.toast(`${rec.name} (#${rec.id}) 위성이 추가되었습니다.`, 'success');
+      this.hud.toast(t('toastNoradAdded', { name: rec.name, id: rec.id }), 'success');
     } catch (err) {
-      this.hud.toast(err.message, 'error');
+      this.hud.toast(t('toastNoradFail', { msg: err.message }), 'error');
     }
   }
 
@@ -567,7 +632,7 @@ class OrbitPulseApp {
     const clean = String(query || '').trim();
     if (clean.length < 2) return;
     try {
-      this.hud.toast(`CelesTrak 전체 DB에서 "${clean}" 검색 중...`, 'info');
+      this.hud.toast(t('toastLiveSearching', { q: clean }), 'info');
       const omms = await searchSatellitesByName(clean);
       const parsed = [];
       for (const omm of omms) {
@@ -575,23 +640,25 @@ class OrbitPulseApp {
         if (rec) parsed.push(rec);
       }
       if (parsed.length === 0) {
-        this.hud.toast(`"${clean}"과 일치하는 공개 위성을 찾지 못했습니다.`, 'info');
+        this.hud.toast(t('toastLiveNone', { q: clean }), 'info');
         return;
       }
       const existingIds = new Set(parsed.map((r) => r.id));
+      const prevSize = this.recordById.size;
       this.state.customRecords = [
         ...this.state.customRecords.filter((r) => !existingIds.has(r.id)),
         ...parsed,
       ];
       this.rebuildRecordCache();
+      const added = Math.max(0, this.recordById.size - prevSize);
       this.syncSatellitesToEngines();
       this.propagateAll(new Date(this.state.simTimeMs));
       this.forceFullPositionSync = true;
       this.renderFilteredList();
       this.selectSatellite(parsed[0].id, true);
-      this.hud.toast(`"${clean}" 검색 결과 ${parsed.length}기를 불러왔습니다.`, 'success');
+      this.hud.toast(t('toastLiveFound', { q: clean, count: parsed.length, added }), 'success');
     } catch (err) {
-      this.hud.toast(`위성 검색 실패: ${err.message}`, 'error');
+      this.hud.toast(t('toastLiveFail', { msg: err.message }), 'error');
     }
   }
 
@@ -608,9 +675,9 @@ class OrbitPulseApp {
       this.forceFullPositionSync = true;
       this.selectSatellite(rec.id, true);
       this.hud.closeAddModal();
-      this.hud.toast(`TLE 위성 "${rec.name}"이(가) 추가되었습니다.`, 'success');
+      this.hud.toast(t('toastTleAdded', { name: rec.name }), 'success');
     } catch (err) {
-      this.hud.toast(err.message, 'error');
+      this.hud.toast(t('toastTleFail', { msg: err.message }), 'error');
     }
   }
 
@@ -618,13 +685,13 @@ class OrbitPulseApp {
     if (!this.state.selectedId) return;
     const id = this.state.selectedId;
     const rec = this.recordById.get(id);
-    const label = rec ? getSatelliteDisplayInfo(rec.id, rec.name).title : `#${id}`;
+    const label = rec ? getSatelliteDisplayInfo(rec.id, rec.name, getLang()).title : `#${id}`;
     if (this.state.favorites.has(id)) {
       this.state.favorites.delete(id);
-      this.hud.toast(`"${label}" 즐겨찾기를 해제했습니다.`, 'info');
+      this.hud.toast(t('toastFavRemoved', { name: label }), 'info');
     } else {
       this.state.favorites.add(id);
-      this.hud.toast(`"${label}"을(를) 즐겨찾기에 추가했습니다.`, 'success');
+      this.hud.toast(t('toastFavAdded', { name: label }), 'success');
     }
     saveFavorites(this.state.favorites);
     this.rebuildRecordCache();
@@ -642,6 +709,8 @@ class OrbitPulseApp {
       url.searchParams.delete('closeup');
     }
     const shareUrl = url.toString();
+    const rec = this.recordById.get(this.state.selectedId);
+    const name = rec ? getSatelliteDisplayInfo(rec.id, rec.name, getLang()).title : `#${this.state.selectedId}`;
 
     try {
       if (navigator.clipboard?.writeText) {
@@ -654,10 +723,10 @@ class OrbitPulseApp {
         document.execCommand('copy');
         input.remove();
       }
-      this.hud.toast('위성 추적 링크가 클립보드에 복사되었습니다!', 'success');
+      this.hud.toast(t('toastLinkCopied', { name }), 'success');
     } catch {
       window.history.replaceState(null, '', shareUrl);
-      this.hud.toast('현재 주소창에 공유 링크가 반영되었습니다.', 'info');
+      this.hud.toast(t('toastLinkReady'), 'info');
     }
   }
 
@@ -692,15 +761,26 @@ class OrbitPulseApp {
     if (pos) {
       this.getActiveEngineInstance().flyToSatellite(pos, 1.0);
     }
-    const kstLabel = new Intl.DateTimeFormat('ko-KR', {
-      timeZone: 'Asia/Seoul',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(new Date(targetMs));
-    this.hud.toast(`통과 시각(${kstLabel} KST)으로 이동해 10× 시뮬레이션을 시작합니다.`, 'info');
+    const lang = getLang();
+    const timeLabel =
+      lang === 'ko'
+        ? new Intl.DateTimeFormat('ko-KR', {
+            timeZone: 'Asia/Seoul',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          }).format(new Date(targetMs)) + ' KST'
+        : new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZoneName: 'short',
+          }).format(new Date(targetMs));
+    this.hud.toast(t('toastJumpPass', { time: timeLabel }), 'info');
   }
 
   scrubToOffsetMinutes(offsetMinutes) {

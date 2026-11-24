@@ -1,4 +1,5 @@
 import { getCategoryColor, getSatelliteDisplayInfo } from '../orbital/catalog.js';
+import { getLang, t } from '../ui/i18n.js';
 
 let loadedApiKey = null;
 let loadPromise = null;
@@ -28,11 +29,11 @@ function loadGoogleMapsScript(apiKey) {
       if (window.google?.maps?.importLibrary) {
         resolve();
       } else {
-        reject(new Error('Google Maps JS API 로드 후 maps 객체를 찾을 수 없습니다.'));
+        reject(new Error(t('errGmapsNoObj')));
       }
     };
     script.onerror = () => {
-      reject(new Error('Google Maps JS API 스크립트 로드에 실패했습니다. API 키와 네트워크를 확인하세요.'));
+      reject(new Error(t('errGmapsScript')));
     };
     document.head.appendChild(script);
   });
@@ -82,7 +83,7 @@ export class GoogleMaps3DEngine {
 
   async init(apiKey) {
     if (!apiKey || !apiKey.trim()) {
-      throw new Error('Google Maps 3D 네이티브 엔진을 사용하려면 Google Maps API 키가 필요합니다.');
+      throw new Error(t('errGmapsKeyNeeded'));
     }
 
     this.apiKey = apiKey.trim();

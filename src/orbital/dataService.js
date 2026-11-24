@@ -4,6 +4,7 @@ import {
   filterSatellitesByCategory,
   isKoreanSatellite,
 } from './catalog.js';
+import { t } from '../ui/i18n.js';
 
 const CELESTRAK_BASE = 'https://celestrak.org/NORAD/elements/gp.php';
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours (respecting CelesTrak usage policy)
@@ -536,7 +537,7 @@ export async function fetchSatelliteGroup(groupName, forceRefresh = false) {
  */
 export async function fetchSatelliteByNoradId(noradId) {
   const clean = String(noradId).replace(/\D/g, '');
-  if (!clean) throw new Error('올바른 숫자 NORAD ID를 입력해 주세요.');
+  if (!clean) throw new Error(t('errInvalidNorad'));
   const numId = Number(clean);
 
   // 1. O(1) master catalog hit (0 API calls)
@@ -556,12 +557,12 @@ export async function fetchSatelliteByNoradId(noradId) {
   }
 
   if (isUpstreamCoolingDown()) {
-    throw new Error('현재 CelesTrak 요청 제한 대기 중입니다. 잠시 후 다시 시도해 주세요.');
+    throw new Error(t('errCooldown'));
   }
 
   const list = await fetchJsonArray(`${CELESTRAK_BASE}?CATNR=${clean}&FORMAT=json`, 9000, true);
   if (!list.length) {
-    throw new Error(`NORAD #${clean} 위성을 찾을 수 없습니다.`);
+    throw new Error(t('errNoradNotFound', { id: clean }));
   }
   const sat = compactOmmRecord(list[0], classifySatelliteGroup(list[0]));
   lookupCache.set(cacheKey, sat);

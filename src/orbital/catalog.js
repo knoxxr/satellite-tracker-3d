@@ -1,23 +1,27 @@
 export const CATEGORIES = [
-  { id: 'all', label: '전체 위성 (ALL)', color: '#38bdf8' },
-  { id: 'featured', label: '주요 추천', color: '#0ea5e9' },
-  { id: 'favorites', label: '즐겨찾기', color: '#fbbf24' },
-  { id: 'visual', label: '육안 관측·밝은 위성', color: '#fde047' },
-  { id: 'korea', label: '한국 위성', color: '#22d3ee' },
-  { id: 'naro', label: '나로우주센터 발사', color: '#38bdf8' },
-  { id: 'stations', label: '우주정거장', color: '#f59e0b' },
-  { id: 'weather', label: '기상·기후', color: '#10b981' },
-  { id: 'earth', label: '지구관측·SAR', color: '#2dd4bf' },
-  { id: 'gnss', label: '전세계 GNSS', color: '#60a5fa' },
-  { id: 'science', label: '과학·천문', color: '#fb7185' },
-  { id: 'geo', label: '정지궤도 GEO', color: '#f97316' },
-  { id: 'heo', label: '타원·몰니야 HEO', color: '#c084fc' },
-  { id: 'starlink', label: '스타링크 전체', color: '#e2e8f0' },
-  { id: 'comms', label: 'OneWeb·Iridium', color: '#34d399' },
-  { id: 'cubesat', label: '큐브·아마추어', color: '#fbbf24' },
-  { id: 'recent', label: '최근 30일 발사', color: '#f43f5e' },
-  { id: 'other', label: '기타·다국적', color: '#94a3b8' },
+  { id: 'all', label: 'All Satellites', labelEn: 'All Satellites', labelKo: '전체 위성 (ALL)', color: '#38bdf8' },
+  { id: 'featured', label: 'Featured', labelEn: 'Featured', labelKo: '주요 추천', color: '#0ea5e9' },
+  { id: 'favorites', label: 'Favorites', labelEn: 'Favorites', labelKo: '즐겨찾기', color: '#fbbf24' },
+  { id: 'visual', label: 'Bright / Visual', labelEn: 'Bright / Visual', labelKo: '육안 관측·밝은 위성', color: '#fde047' },
+  { id: 'korea', label: 'South Korea', labelEn: 'South Korea', labelKo: '한국 위성', color: '#22d3ee' },
+  { id: 'naro', label: 'Naro Launches', labelEn: 'Naro Launches', labelKo: '나로우주센터 발사', color: '#38bdf8' },
+  { id: 'stations', label: 'Space Stations', labelEn: 'Space Stations', labelKo: '우주정거장', color: '#f59e0b' },
+  { id: 'weather', label: 'Weather & Climate', labelEn: 'Weather & Climate', labelKo: '기상·기후', color: '#10b981' },
+  { id: 'earth', label: 'Earth Obs & SAR', labelEn: 'Earth Obs & SAR', labelKo: '지구관측·SAR', color: '#2dd4bf' },
+  { id: 'gnss', label: 'Global GNSS', labelEn: 'Global GNSS', labelKo: '전세계 GNSS', color: '#60a5fa' },
+  { id: 'science', label: 'Science & Astro', labelEn: 'Science & Astro', labelKo: '과학·천문', color: '#fb7185' },
+  { id: 'geo', label: 'Geostationary GEO', labelEn: 'Geostationary GEO', labelKo: '정지궤도 GEO', color: '#f97316' },
+  { id: 'heo', label: 'Elliptical HEO', labelEn: 'Elliptical HEO', labelKo: '타원·몰니야 HEO', color: '#c084fc' },
+  { id: 'starlink', label: 'All Starlink', labelEn: 'All Starlink', labelKo: '스타링크 전체', color: '#e2e8f0' },
+  { id: 'comms', label: 'OneWeb · Iridium', labelEn: 'OneWeb · Iridium', labelKo: 'OneWeb·Iridium', color: '#34d399' },
+  { id: 'cubesat', label: 'CubeSats & Ham', labelEn: 'CubeSats & Ham', labelKo: '큐브·아마추어', color: '#fbbf24' },
+  { id: 'recent', label: 'Last 30 Days', labelEn: 'Last 30 Days', labelKo: '최근 30일 발사', color: '#f43f5e' },
+  { id: 'other', label: 'Other / Global', labelEn: 'Other / Global', labelKo: '기타·다국적', color: '#94a3b8' },
 ];
+
+export function getCategoryLabel(cat, lang = 'en') {
+  return lang === 'ko' ? cat.labelKo || cat.label : cat.labelEn || cat.label;
+}
 
 export const GROUP_COLORS = {
   all: '#38bdf8',
@@ -41,357 +45,504 @@ export const GROUP_COLORS = {
 };
 
 export const GROUP_LABELS = {
-  all: '활성 위성',
-  visual: '밝은 위성',
-  stations: '우주정거장',
-  korea: '한국 위성',
-  naro: '나로 발사',
-  weather: '기상·기후',
-  earth: '지구관측·SAR',
-  gnss: 'GNSS 항법',
-  gps: 'GNSS 항법',
-  science: '과학·천문',
-  geo: '정지궤도 GEO',
-  heo: '타원궤도 HEO',
-  starlink: '스타링크 군집',
-  comms: '통신 군집',
-  cubesat: '큐브·아마추어',
-  recent: '신규 발사',
-  other: '일반 위성',
-  custom: '사용자 추가',
+  all: { en: 'Active Satellite', ko: '활성 위성' },
+  visual: { en: 'Bright / Visual', ko: '밝은 위성' },
+  stations: { en: 'Space Station', ko: '우주정거장' },
+  korea: { en: 'South Korea', ko: '한국 위성' },
+  naro: { en: 'Naro Launch', ko: '나로 발사' },
+  weather: { en: 'Weather', ko: '기상·기후' },
+  earth: { en: 'Earth Obs / SAR', ko: '지구관측·SAR' },
+  gnss: { en: 'GNSS Navigation', ko: 'GNSS 항법' },
+  gps: { en: 'GNSS Navigation', ko: 'GNSS 항법' },
+  science: { en: 'Science & Astro', ko: '과학·천문' },
+  geo: { en: 'Geostationary', ko: '정지궤도 GEO' },
+  heo: { en: 'Elliptical HEO', ko: '타원궤도 HEO' },
+  starlink: { en: 'Starlink', ko: '스타링크 군집' },
+  comms: { en: 'Comms Constellation', ko: '통신 군집' },
+  cubesat: { en: 'CubeSat / Ham', ko: '큐브·아마추어' },
+  recent: { en: 'Recent Launch', ko: '신규 발사' },
+  other: { en: 'General Satellite', ko: '일반 위성' },
+  custom: { en: 'Custom Added', ko: '사용자 추가' },
 };
 
 export const SATCAT_OWNERS = {
-  SKOR: '대한민국 (SKOR)',
-  US: '미국 (US)',
-  PRC: '중국 (PRC)',
-  CIS: '러시아 / CIS',
-  UK: '영국 (UK)',
-  JPN: '일본 (JPN)',
-  ESA: '유럽우주국 (ESA)',
-  IND: '인도 (IND)',
-  FR: '프랑스 (FR)',
-  GER: '독일 (GER)',
-  IT: '이탈리아 (IT)',
-  CA: '캐나다 (CA)',
-  SPN: '스페인 (SPN)',
-  TURK: '튀르키예 (TURK)',
-  ISS: '국제우주정거장 (다국적)',
-  EUTE: 'Eutelsat (유럽)',
-  SES: 'SES (룩셈부르크)',
-  ITSO: 'Intelsat (국제)',
-  IM: 'Inmarsat (국제)',
-  O3B: 'O3b Networks',
-  GLOB: 'Globalstar',
-  ORB: 'Orbcomm',
-  AUS: '호주 (AUS)',
-  BRAZ: '브라질 (BRAZ)',
-  ISRA: '이스라엘 (ISRA)',
-  ARGN: '아르헨티나 (ARGN)',
-  SAUD: '사우디아라비아 (SAUD)',
-  UAE: '아랍에미리트 (UAE)',
-  TWN: '대만 (TWN)',
-  SING: '싱가포르 (SING)',
-  NOR: '노르웨이 (NOR)',
-  SWED: '스웨덴 (SWED)',
-  NETH: '네덜란드 (NETH)',
-  POL: '폴란드 (POL)',
-  FIN: '핀란드 (FIN)',
-  TBD: '미지정 (TBD)',
+  SKOR: { en: 'South Korea (SKOR)', ko: '대한민국 (SKOR)' },
+  US: { en: 'United States (US)', ko: '미국 (US)' },
+  PRC: { en: 'China (PRC)', ko: '중국 (PRC)' },
+  CIS: { en: 'Russia / CIS', ko: '러시아 / CIS' },
+  UK: { en: 'United Kingdom (UK)', ko: '영국 (UK)' },
+  JPN: { en: 'Japan (JPN)', ko: '일본 (JPN)' },
+  ESA: { en: 'European Space Agency (ESA)', ko: '유럽우주국 (ESA)' },
+  IND: { en: 'India (IND)', ko: '인도 (IND)' },
+  FR: { en: 'France (FR)', ko: '프랑스 (FR)' },
+  GER: { en: 'Germany (GER)', ko: '독일 (GER)' },
+  IT: { en: 'Italy (IT)', ko: '이탈리아 (IT)' },
+  CA: { en: 'Canada (CA)', ko: '캐나다 (CA)' },
+  SPN: { en: 'Spain (SPN)', ko: '스페인 (SPN)' },
+  TURK: { en: 'Türkiye (TURK)', ko: '튀르키예 (TURK)' },
+  ISS: { en: 'International (ISS)', ko: '국제우주정거장 (다국적)' },
+  EUTE: { en: 'Eutelsat (Europe)', ko: 'Eutelsat (유럽)' },
+  SES: { en: 'SES (Luxembourg)', ko: 'SES (룩셈부르크)' },
+  ITSO: { en: 'Intelsat (Intl.)', ko: 'Intelsat (국제)' },
+  IM: { en: 'Inmarsat (Intl.)', ko: 'Inmarsat (국제)' },
+  O3B: { en: 'O3b Networks', ko: 'O3b Networks' },
+  GLOB: { en: 'Globalstar', ko: 'Globalstar' },
+  ORB: { en: 'Orbcomm', ko: 'Orbcomm' },
+  AUS: { en: 'Australia (AUS)', ko: '호주 (AUS)' },
+  BRAZ: { en: 'Brazil (BRAZ)', ko: '브라질 (BRAZ)' },
+  ISRA: { en: 'Israel (ISRA)', ko: '이스라엘 (ISRA)' },
+  ARGN: { en: 'Argentina (ARGN)', ko: '아르헨티나 (ARGN)' },
+  SAUD: { en: 'Saudi Arabia (SAUD)', ko: '사우디아라비아 (SAUD)' },
+  UAE: { en: 'UAE', ko: '아랍에미리트 (UAE)' },
+  TWN: { en: 'Taiwan (TWN)', ko: '대만 (TWN)' },
+  SING: { en: 'Singapore (SING)', ko: '싱가포르 (SING)' },
+  NOR: { en: 'Norway (NOR)', ko: '노르웨이 (NOR)' },
+  SWED: { en: 'Sweden (SWED)', ko: '스웨덴 (SWED)' },
+  NETH: { en: 'Netherlands (NETH)', ko: '네덜란드 (NETH)' },
+  POL: { en: 'Poland (POL)', ko: '폴란드 (POL)' },
+  FIN: { en: 'Finland (FIN)', ko: '핀란드 (FIN)' },
+  TBD: { en: 'Unassigned (TBD)', ko: '미지정 (TBD)' },
 };
 
 export const SATCAT_LAUNCH_SITES = {
-  NSC: '나로우주센터 (대한민국 고흥)',
-  JJSLA: '제주 남방 해상발사 (대한민국)',
-  AFETR: '케이프 커내버럴 / KSC (미국)',
-  AFWTR: '반덴버그 우주군기지 (미국)',
-  FRGUI: '기아나 우주센터 (쿠루)',
-  TANSC: '다네가시마 우주센터 (일본)',
-  USC: '우치노우라 우주센터 (일본)',
-  TYMSC: '바이코누르 우주기지 (카자흐스탄)',
-  PLMSC: '플레세츠크 우주기지 (러시아)',
-  VOSTO: '보스토치니 우주기지 (러시아)',
-  DLS: '돔바롭스키 기지 (러시아)',
-  RLLB: '마히아 반도 (뉴질랜드)',
-  SRILR: '사티시 다완 우주센터 (인도)',
-  JSC: '주취안 위성발사센터 (중국)',
-  TAISC: '타이위안 위성발사센터 (중국)',
-  WSC: '원창 우주발사장 (중국)',
-  XICLF: '시창 위성발사센터 (중국)',
-  SEAL: '시런치 (태평양 해상)',
-  WLPIS: '월롭스 비행시설 (미국)',
-  KODAK: '코디악 발사장 (미국 알래스카)',
+  NSC: { en: 'Naro Space Center (Goheung, ROK)', ko: '나로우주센터 (대한민국 고흥)' },
+  JJSLA: { en: 'Jeju Offshore Launch (ROK)', ko: '제주 남방 해상발사 (대한민국)' },
+  AFETR: { en: 'Cape Canaveral / KSC (USA)', ko: '케이프 커내버럴 / KSC (미국)' },
+  AFWTR: { en: 'Vandenberg SFB (USA)', ko: '반덴버그 우주군기지 (미국)' },
+  FRGUI: { en: 'Guiana Space Centre (Kourou)', ko: '기아나 우주센터 (쿠루)' },
+  TANSC: { en: 'Tanegashima Space Center (Japan)', ko: '다네가시마 우주센터 (일본)' },
+  USC: { en: 'Uchinoura Space Center (Japan)', ko: '우치노우라 우주센터 (일본)' },
+  TYMSC: { en: 'Baikonur Cosmodrome (Kazakhstan)', ko: '바이코누르 우주기지 (카자흐스탄)' },
+  PLMSC: { en: 'Plesetsk Cosmodrome (Russia)', ko: '플레세츠크 우주기지 (러시아)' },
+  VOSTO: { en: 'Vostochny Cosmodrome (Russia)', ko: '보스토치니 우주기지 (러시아)' },
+  DLS: { en: 'Dombarovsky Air Base (Russia)', ko: '돔바롭스키 기지 (러시아)' },
+  RLLB: { en: 'Mahia Peninsula (New Zealand)', ko: '마히아 반도 (뉴질랜드)' },
+  SRILR: { en: 'Satish Dhawan Space Centre (India)', ko: '사티시 다완 우주센터 (인도)' },
+  JSC: { en: 'Jiuquan Satellite Launch Center (China)', ko: '주취안 위성발사센터 (중국)' },
+  TAISC: { en: 'Taiyuan Satellite Launch Center (China)', ko: '타이위안 위성발사센터 (중국)' },
+  WSC: { en: 'Wenchang Space Launch Site (China)', ko: '원창 우주발사장 (중국)' },
+  XICLF: { en: 'Xichang Satellite Launch Center (China)', ko: '시창 위성발사센터 (중국)' },
+  SEAL: { en: 'Sea Launch (Pacific Ocean)', ko: '시런치 (태평양 해상)' },
+  WLPIS: { en: 'Wallops Flight Facility (USA)', ko: '월롭스 비행시설 (미국)' },
+  KODAK: { en: 'Pacific Spaceport Complex (Alaska)', ko: '코디악 발사장 (미국 알래스카)' },
 };
 
 export const SATCAT_OPS_STATUS = {
-  '+': { label: '운용 중', tone: 'active' },
-  '-': { label: '임무 종료', tone: 'inactive' },
-  P: { label: '부분 운용', tone: 'partial' },
-  B: { label: '백업 운용', tone: 'partial' },
-  S: { label: '예비 궤도', tone: 'partial' },
-  X: { label: '연장 임무', tone: 'active' },
-  D: { label: '재진입 소멸', tone: 'inactive' },
-  '?': { label: '상태 미확인', tone: 'unknown' },
+  '+': { en: 'Operational', ko: '운용 중', tone: 'active' },
+  '-': { en: 'Nonoperational', ko: '임무 종료', tone: 'inactive' },
+  P: { en: 'Partially Operational', ko: '부분 운용', tone: 'partial' },
+  B: { en: 'Backup / Standby', ko: '백업 운용', tone: 'partial' },
+  S: { en: 'Spare', ko: '예비 궤도', tone: 'partial' },
+  X: { en: 'Extended Mission', ko: '연장 임무', tone: 'active' },
+  D: { en: 'Decayed', ko: '재진입 소멸', tone: 'inactive' },
+  '?': { en: 'Unknown', ko: '상태 미확인', tone: 'unknown' },
 };
 
-export function getOwnerLabel(code) {
-  if (!code) return '정보 없음';
-  return SATCAT_OWNERS[code] || code;
+export function getOwnerLabel(code, lang = 'en') {
+  if (!code) return lang === 'ko' ? '정보 없음' : 'N/A';
+  const entry = SATCAT_OWNERS[code];
+  if (!entry) return code;
+  return lang === 'ko' ? entry.ko : entry.en;
 }
 
-export function getLaunchSiteLabel(code) {
-  if (!code) return '정보 없음';
-  return SATCAT_LAUNCH_SITES[code] || code;
+export function getLaunchSiteLabel(code, lang = 'en') {
+  if (!code) return lang === 'ko' ? '정보 없음' : 'N/A';
+  const entry = SATCAT_LAUNCH_SITES[code];
+  if (!entry) return code;
+  return lang === 'ko' ? entry.ko : entry.en;
 }
 
-export function getOpsStatusInfo(code) {
-  if (!code) return { label: '정보 없음', tone: 'unknown' };
-  return SATCAT_OPS_STATUS[code] || { label: code, tone: 'unknown' };
+export function getOpsStatusInfo(code, lang = 'en') {
+  if (!code) return { label: lang === 'ko' ? '정보 없음' : 'N/A', tone: 'unknown' };
+  const entry = SATCAT_OPS_STATUS[code];
+  if (!entry) return { label: code, tone: 'unknown' };
+  return { label: lang === 'ko' ? entry.ko : entry.en, tone: entry.tone };
 }
 
-export function getRcsSizeLabel(rcs) {
+export function getRcsSizeLabel(rcs, lang = 'en') {
   const val = Number(rcs);
-  if (!Number.isFinite(val) || val <= 0) return '비공개 / 미측정';
-  const grade = val >= 5 ? '대형' : val >= 1 ? '중형' : val >= 0.1 ? '소형' : '초소형';
+  if (!Number.isFinite(val) || val <= 0) {
+    return lang === 'ko' ? '비공개 / 미측정' : 'Undisclosed / N/A';
+  }
+  const grade =
+    lang === 'ko'
+      ? val >= 5
+        ? '대형'
+        : val >= 1
+          ? '중형'
+          : val >= 0.1
+            ? '소형'
+            : '초소형'
+      : val >= 5
+        ? 'Large'
+        : val >= 1
+          ? 'Medium'
+          : val >= 0.1
+            ? 'Small'
+            : 'Micro';
   return `${val.toFixed(2)} m² (${grade})`;
 }
 
 export const OBSERVER_PRESETS = [
-  { id: 'seoul', name: '서울 (Seoul)', lat: 37.5665, lon: 126.978, heightKm: 0.04 },
-  { id: 'daejeon', name: '대전 KARI (항공우주연구원)', lat: 36.3746, lon: 127.3536, heightKm: 0.08 },
-  { id: 'busan', name: '부산 (Busan)', lat: 35.1796, lon: 129.0756, heightKm: 0.03 },
-  { id: 'jeju', name: '제주 (Jeju)', lat: 33.4996, lon: 126.5312, heightKm: 0.05 },
-  { id: 'tokyo', name: '도쿄 (Tokyo)', lat: 35.6762, lon: 139.6503, heightKm: 0.04 },
-  { id: 'newyork', name: '뉴욕 (New York)', lat: 40.7128, lon: -74.006, heightKm: 0.02 },
-  { id: 'london', name: '런던 (London)', lat: 51.5074, lon: -0.1278, heightKm: 0.02 },
+  { id: 'seoul', name: 'Seoul, South Korea', nameEn: 'Seoul, South Korea', nameKo: '서울 (Seoul)', shortEn: 'Seoul', shortKo: '서울', lat: 37.5665, lon: 126.978, heightKm: 0.04 },
+  { id: 'daejeon', name: 'Daejeon (KARI)', nameEn: 'Daejeon (KARI)', nameKo: '대전 KARI (항공우주연구원)', shortEn: 'Daejeon', shortKo: '대전', lat: 36.3746, lon: 127.3536, heightKm: 0.08 },
+  { id: 'busan', name: 'Busan, South Korea', nameEn: 'Busan, South Korea', nameKo: '부산 (Busan)', shortEn: 'Busan', shortKo: '부산', lat: 35.1796, lon: 129.0756, heightKm: 0.03 },
+  { id: 'jeju', name: 'Jeju, South Korea', nameEn: 'Jeju, South Korea', nameKo: '제주 (Jeju)', shortEn: 'Jeju', shortKo: '제주', lat: 33.4996, lon: 126.5312, heightKm: 0.05 },
+  { id: 'tokyo', name: 'Tokyo, Japan', nameEn: 'Tokyo, Japan', nameKo: '도쿄 (Tokyo)', shortEn: 'Tokyo', shortKo: '도쿄', lat: 35.6762, lon: 139.6503, heightKm: 0.04 },
+  { id: 'newyork', name: 'New York, USA', nameEn: 'New York, USA', nameKo: '뉴욕 (New York)', shortEn: 'New York', shortKo: '뉴욕', lat: 40.7128, lon: -74.006, heightKm: 0.02 },
+  { id: 'london', name: 'London, UK', nameEn: 'London, UK', nameKo: '런던 (London)', shortEn: 'London', shortKo: '런던', lat: 51.5074, lon: -0.1278, heightKm: 0.02 },
 ];
 
+export function getObserverPresetName(obs, lang = 'en') {
+  if (!obs) return '';
+  if (lang === 'ko') return obs.nameKo || obs.name || '';
+  return obs.nameEn || obs.name || '';
+}
+
+export function getObserverShortName(obs, lang = 'en') {
+  if (!obs) return '';
+  if (lang === 'ko') return obs.shortKo || (obs.nameKo || obs.name || '').split(' ')[0];
+  return obs.shortEn || (obs.nameEn || obs.name || '').split(',')[0];
+}
+
 /**
- * Curated Korean notes for well-known spacecraft so users immediately recognize them.
+ * Curated bilingual notes for well-known spacecraft.
  */
 export const NOTABLE_SATELLITES = {
   25544: {
+    enName: 'International Space Station (ISS)',
     koName: '국제우주정거장 (ISS)',
+    enSummary: 'Humanity’s largest crewed orbital laboratory at ~420 km LEO (prime naked-eye target).',
     summary: '고도 약 420km 저궤도를 92분마다 공전하는 인류 최대 유인 우주정거장 (육안 관측 최상)',
   },
   48274: {
+    enName: 'Tiangong Space Station (Tianhe)',
     koName: '중국 톈궁 우주정거장 (톈허)',
+    enSummary: 'Core module (Tianhe) of China’s crewed Tiangong space station — bright naked-eye target.',
     summary: '중국 유인 우주정거장 톈궁의 핵심 모듈(Tianhe) · 매우 밝은 육안 관측 대상',
   },
   20580: {
+    enName: 'Hubble Space Telescope (HST)',
     koName: '허블 우주망원경 (HST)',
+    enSummary: 'NASA/ESA optical space telescope launched in 1990 observing the deep universe.',
     summary: '1990년 발사되어 심우주를 관측 중인 NASA/ESA 우주망원경',
   },
   22077: {
+    enName: 'KITSAT-1 (Uribyol-1)',
     koName: '우리별 1호 (KITSAT-1)',
+    enSummary: 'South Korea’s first artificial satellite, launched in August 1992.',
     summary: '1992년 발사된 대한민국 최초의 인공위성',
   },
   22828: {
+    enName: 'KITSAT-2 (Uribyol-2)',
     koName: '우리별 2호 (KITSAT-2)',
+    enSummary: 'South Korea’s second satellite, built by domestic engineers in 1993.',
     summary: '1993년 국내 기술진 주도로 제작된 대한민국 두 번째 인공위성',
   },
   23639: {
+    enName: 'KOREASAT 1 (Mugunghwa-1)',
     koName: '무궁화 1호 (KOREASAT 1)',
+    enSummary: 'South Korea’s first commercial geostationary communications satellite (1995).',
     summary: '1995년 발사된 대한민국 최초의 상용 정지궤도 통신·방송 위성',
   },
   25756: {
+    enName: 'KITSAT-3 (Uribyol-3)',
     koName: '우리별 3호 (KITSAT-3)',
+    enSummary: 'First indigenously designed Korean experimental science microsatellite (1999).',
     summary: '1999년 독자 설계·개발된 대한민국 최초 고유 모델 과학실험위성',
   },
   26032: {
+    enName: 'KOMPSAT-1 (Arirang-1)',
     koName: '아리랑 1호 (KOMPSAT-1)',
+    enSummary: 'South Korea’s first multipurpose Earth observation satellite (1999).',
     summary: '1999년 발사된 대한민국 최초의 다목적실용위성',
   },
   27945: {
+    enName: 'STSAT-1',
     koName: '과학기술위성 1호 (STSAT-1)',
+    enSummary: 'Korean science & technology satellite carrying a far-UV space telescope (2003).',
     summary: '2003년 발사된 국산 우주망원경 탑재 과학기술위성',
   },
   29268: {
+    enName: 'KOMPSAT-2 (Arirang-2)',
     koName: '아리랑 2호 (KOMPSAT-2)',
+    enSummary: 'High-resolution 1m-class optical Earth observation satellite.',
     summary: '1m급 고해상도 광학 카메라를 탑재한 다목적실용위성 2호',
   },
   29349: {
+    enName: 'KOREASAT 5 (Mugunghwa-5)',
     koName: '무궁화 5호 (KOREASAT 5)',
+    enSummary: 'Dual-use civil/military geostationary communications satellite.',
     summary: '민·군 공용 정지궤도 통신·방송 위성',
   },
   36744: {
+    enName: 'COMS-1 (Cheollian-1)',
     koName: '천리안 1호 (COMS-1)',
+    enSummary: 'South Korea’s first geostationary multi-mission weather, ocean, and comms satellite (2010).',
     summary: '2010년 발사된 대한민국 최초의 정지궤도 통신·해양·기상 복합위성',
   },
   37265: {
+    enName: 'KOREASAT 6 (Mugunghwa-6)',
     koName: '무궁화 6호 (KOREASAT 6)',
+    enSummary: 'KT SAT geostationary broadcast & telecommunications satellite.',
     summary: 'KT SAT 정지궤도 방송·위성통신 주력 위성',
   },
   38338: {
+    enName: 'KOMPSAT-3 (Arirang-3)',
     koName: '아리랑 3호 (KOMPSAT-3)',
+    enSummary: 'Korean 0.7m-class high-resolution electro-optical Earth observation satellite.',
     summary: '대한민국 다목적실용위성 3호 · 0.7m급 고해상도 광학 지구관측 위성',
   },
   39227: {
+    enName: 'KOMPSAT-5 (Arirang-5)',
     koName: '아리랑 5호 (KOMPSAT-5)',
+    enSummary: 'South Korea’s first all-weather Synthetic Aperture Radar (SAR) observation satellite.',
     summary: '대한민국 최초 영상레이더(SAR) 탑재 전천후 지구관측 위성',
   },
   39422: {
+    enName: 'STSAT-3',
     koName: '과학기술위성 3호 (STSAT-3)',
+    enSummary: 'Korean science satellite equipped with near-infrared space & Earth cameras.',
     summary: '적외선 우주·지구 관측 카메라를 탑재한 국산 과학위성',
   },
   40536: {
+    enName: 'KOMPSAT-3A (Arirang-3A)',
     koName: '아리랑 3A호 (KOMPSAT-3A)',
+    enSummary: 'Sub-meter optical + infrared Earth observation multipurpose satellite.',
     summary: '초고해상도 광학 + 적외선 센서 탑재 다목적실용위성',
   },
   42691: {
+    enName: 'KOREASAT 7 (Mugunghwa-7)',
     koName: '무궁화 7호 (KOREASAT 7)',
+    enSummary: 'KT SAT geostationary broadcast and regional communications satellite.',
     summary: 'KT SAT 정지궤도 방송·통신 위성',
   },
   42984: {
+    enName: 'KOREASAT 5A (Mugunghwa-5A)',
     koName: '무궁화 5A호 (KOREASAT 5A)',
+    enSummary: 'East Asia & maritime wide-beam geostationary communications satellite.',
     summary: '동아시아·해상 광역 커버리지 정지궤도 통신 위성',
   },
   43782: {
+    enName: 'SNUSAT-2',
     koName: '서울대 위성 2호 (SNUSAT-2)',
+    enSummary: 'Earth observation CubeSat developed by Seoul National University.',
     summary: '서울대학교 개발 지구관측 초소형 큐브위성',
   },
   43811: {
+    enName: 'NEXTSAT-1',
     koName: '차세대소형위성 1호 (NEXTSAT-1)',
+    enSummary: 'KAIST SaTReC space science & core technology verification small satellite.',
     summary: 'KAIST 인공위성연구소 개발 우주과학·핵심기술 검증 소형위성',
   },
   43823: {
+    enName: 'GEO-KOMPSAT-2A (Cheollian-2A)',
     koName: '천리안 2A호 (GK-2A)',
+    enSummary: 'Geostationary weather & space-weather satellite stationed at 128.2°E over Korea.',
     summary: '동경 128.2° 정지궤도에서 한반도 기상·우주기상을 상시 감시하는 위성',
   },
   45246: {
+    enName: 'GEO-KOMPSAT-2B (Cheollian-2B)',
     koName: '천리안 2B호 (GK-2B)',
+    enSummary: 'Geostationary ocean & atmospheric environment (air quality) monitoring satellite at 128.2°E.',
     summary: '동경 128.2° 정지궤도에서 한반도 해양·대기환경(미세먼지)을 관측하는 위성',
   },
   45920: {
+    enName: 'ANASIS-II (KOREASAT 116)',
     koName: '아나시스 2호 (KOREASAT 116)',
+    enSummary: 'South Korea’s first dedicated military geostationary communications satellite.',
     summary: '대한민국 최초 군 전용 정지궤도 통신위성 (ANASIS-II)',
   },
   47932: {
+    enName: 'CAS500-1',
     koName: '차세대중형위성 1호 (국토위성)',
+    enSummary: 'Indigenous 500 kg-class standard-platform precision land observation satellite.',
     summary: '국내 독자 개발 500kg급 표준 플랫폼 정밀 지상관측 위성',
   },
   52894: {
+    enName: 'PVSAT (Nuri KSLV-II)',
     koName: '누리호 성능검증위성 (PVSAT)',
+    enSummary: 'Performance Verification Satellite launched from Naro Space Center on Nuri Flight 2 (2022).',
     summary: '2022년 누리호 2차 발사 성공으로 나로우주센터에서 궤도에 안착한 위성',
   },
   56743: {
+    enName: 'NEXTSAT-2',
     koName: '차세대소형위성 2호 (NEXTSAT-2)',
+    enSummary: 'Korean small X-band SAR imaging satellite launched aboard Nuri Flight 3.',
     summary: '누리호 3차 발사로 궤도에 안착한 국산 소형 SAR 영상레이더 위성',
   },
   56744: {
+    enName: 'SNIPE 4 (Doyosat-4)',
     koName: '도요샛 4호 라온 (SNIPE 4)',
+    enSummary: 'KASI formation-flying space weather nanosatellite.',
     summary: '한국천문연구원 개발 편대비행 우주날씨 관측 큐브위성',
   },
   56745: {
+    enName: 'SNIPE 2 (Doyosat-2)',
     koName: '도요샛 2호 나래 (SNIPE 2)',
+    enSummary: 'KASI formation-flying space weather nanosatellite.',
     summary: '한국천문연구원 개발 편대비행 우주날씨 관측 큐브위성',
   },
   58323: {
+    enName: 'OBSERVER-1A',
     koName: '옵저버-1A (OBSERVER-1A)',
+    enSummary: 'Commercial micro Earth-observation satellite developed by Nara Space.',
     summary: '나라스페이스테크놀로지 개발 국내 민간 초소형 지구관측 위성',
   },
   58463: {
+    enName: 'KORSAT-7 (425 EO/IR #1)',
     koName: '군정찰위성 1호기 (KORSAT-7)',
+    enSummary: 'Korean 425-program EO/IR reconnaissance satellite (public catalog orbit).',
     summary: '대한민국 425 사업 고해상도 전자광학·적외선(EO/IR) 정찰위성 (공개 궤도)',
   },
   59117: {
+    enName: 'CONTECSAT-1',
     koName: '컨텍샛-1 (CONTECSAT-1)',
+    enSummary: 'Commercial optical Earth observation satellite operated by CONTEC.',
     summary: '국내 우주기업 컨텍(CONTEC)이 운용하는 광학 지구관측 위성',
   },
   59452: {
+    enName: 'KORSAT-1 (425 SAR #2)',
     koName: '군정찰위성 2호기 (KORSAT-1)',
+    enSummary: 'Korean 425-program all-weather SAR satellite (public catalog orbit).',
     summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
   },
   59587: {
+    enName: 'NEONSAT-1',
     koName: '초소형군집위성 1호 (NEONSAT-1)',
+    enSummary: 'Pathfinder spacecraft for South Korea’s high-revisit micro-constellation.',
     summary: '한반도 정밀 감시를 위한 대한민국 초소형 군집위성 선도기',
   },
   61910: {
+    enName: 'KOREASAT 6A (Mugunghwa-6A)',
     koName: '무궁화 6A호 (KOREASAT 6A)',
+    enSummary: 'KT SAT next-generation geostationary communications satellite (launched 2024).',
     summary: 'KT SAT 차세대 정지궤도 통신 위성 (2024년 발사)',
   },
   62377: {
+    enName: 'KORSAT-2 (425 SAR #3)',
     koName: '군정찰위성 3호기 (KORSAT-2)',
+    enSummary: 'Korean 425-program all-weather SAR satellite (public catalog orbit).',
     summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
   },
   63210: {
+    enName: 'JINJUSAT-1B',
     koName: '진주샛-1B (JINJUSAT-1B)',
+    enSummary: 'Regional Earth-observation CubeSat jointly developed by Jinju City, GNU, and KTL.',
     summary: '경상남도 진주시·경상국립대·KTL 공동 개발 초소형 지구관측 큐브위성',
   },
   63229: {
+    enName: 'SpaceEye-T1',
     koName: '스페이스아이-T1 (SPACEEYE-T1)',
+    enSummary: '30 cm-class ultra-high-resolution commercial optical satellite by Satrec Initiative.',
     summary: '쎄트렉아이 자체 개발 30cm급 초고해상도 상용 광학 지구관측 위성',
   },
   63630: {
+    enName: 'KORSAT-3 (425 SAR #4)',
     koName: '군정찰위성 4호기 (KORSAT-3)',
+    enSummary: 'Korean 425-program all-weather SAR satellite (public catalog orbit).',
     summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
   },
   66293: {
+    enName: 'KORSAT-4 (425 SAR #5)',
     koName: '군정찰위성 5호기 (KORSAT-4)',
+    enSummary: 'Korean 425-program all-weather SAR satellite (public catalog orbit).',
     summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
   },
   66655: {
+    enName: 'CAS500-3',
     koName: '차세대중형위성 3호 (CAS500-3)',
+    enSummary: 'Space science & technology-verification satellite launched from Naro Space Center on Nuri Flight 4.',
     summary: '누리호 4차 발사로 나로우주센터에서 궤도에 안착한 우주과학·기술검증 위성',
   },
   66771: {
+    enName: 'GYEONGGISAT-1',
     koName: '경기기후위성 1호 (GYEONGGISAT-1)',
+    enSummary: 'Gyeonggi Province microsatellite monitoring greenhouse gases & climate change.',
     summary: '경기도 온실가스·기후변화 정밀 관측용 초소형 위성',
   },
   66820: {
+    enName: 'KOMPSAT-7 (Arirang-7)',
     koName: '아리랑 7호 (KOMPSAT-7)',
+    enSummary: 'Next-generation 0.3m-class ultra-high-resolution optical Earth observation satellite.',
     summary: '0.3m급 초고해상도 광학 관측 능력을 갖춘 차세대 다목적실용위성',
   },
   67614: {
+    enName: 'NEONSAT-1A',
     koName: '초소형군집위성 1A호 (NEONSAT-1A)',
+    enSummary: 'South Korean rapid-revisit Earth-observation constellation satellite.',
     summary: '한반도 재방문 주기를 단축하는 대한민국 초소형 군집위성',
   },
   68989: {
+    enName: 'BUSANSAT',
     koName: '부산샛 (BUSANSAT)',
+    enSummary: 'Busan Metropolitan City nanosatellite monitoring coastal marine aerosols & environment.',
     summary: '부산광역시 해양 미세먼지·연안 환경 관측용 초소형 위성',
   },
   69013: {
+    enName: 'CAS500-2',
     koName: '차세대중형위성 2호 (CAS500-2)',
+    enSummary: '500 kg-class high-resolution optical satellite for national land & resource mapping.',
     summary: '국토·자원 관리용 500kg급 고해상도 광학 지구관측 위성',
   },
   69869: {
+    enName: 'CAS500-4',
     koName: '차세대중형위성 4호 (CAS500-4)',
+    enSummary: 'Wide-swath precision observation satellite for agriculture, forestry, and water resources.',
     summary: '농림·산림·수자원 광역 정밀 관측용 농림위성',
   },
   100950: {
+    enName: 'GYEONGGISAT-2A',
     koName: '경기기후위성 2A호 (GYEONGGISAT-2A)',
+    enSummary: 'Next-generation Gyeonggi Province climate & greenhouse-gas monitoring satellite.',
     summary: '경기도 온실가스 정밀 감시용 차세대 기후위성',
   },
   100955: {
+    enName: 'NEONSAT-02',
     koName: '초소형군집위성 2호 (NEONSAT-02)',
+    enSummary: 'Production unit of South Korea’s micro-constellation launched from Naro Space Center.',
     summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
   },
   100961: {
+    enName: 'NEONSAT-03',
     koName: '초소형군집위성 3호 (NEONSAT-03)',
+    enSummary: 'Production unit of South Korea’s micro-constellation launched from Naro Space Center.',
     summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
   },
   100962: {
+    enName: 'NEONSAT-04',
     koName: '초소형군집위성 4호 (NEONSAT-04)',
+    enSummary: 'Production unit of South Korea’s micro-constellation launched from Naro Space Center.',
     summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
   },
   100963: {
+    enName: 'NEONSAT-05',
     koName: '초소형군집위성 5호 (NEONSAT-05)',
+    enSummary: 'Production unit of South Korea’s micro-constellation launched from Naro Space Center.',
     summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
   },
   100967: {
+    enName: 'DAEJEONSAT-1',
     koName: '대전샛-1 (DAEJEONSAT-1)',
+    enSummary: 'Regional space-industry microsatellite developed by Daejeon’s industry-academia consortium.',
     summary: '대전광역시 산학연 공동 개발 지역 우주산업 초소형 위성',
   },
   100968: {
+    enName: 'NEONSAT-06',
     koName: '초소형군집위성 6호 (NEONSAT-06)',
+    enSummary: 'Production unit of South Korea’s micro-constellation launched from Naro Space Center.',
     summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
   },
   43013: {
+    enName: 'NOAA-20 (JPSS-1)',
     koName: 'NOAA-20 (JPSS-1)',
+    enSummary: 'US polar-orbiting meteorological satellite feeding global weather forecasting models.',
     summary: '극궤도를 돌며 전 지구 기상 예보 데이터를 수집하는 미국 기상위성',
   },
   54234: {
+    enName: 'NOAA-21 (JPSS-2)',
     koName: 'NOAA-21 (JPSS-2)',
+    enSummary: 'Latest-generation polar-orbiting weather & environmental observation satellite.',
     summary: '최신 극궤도 기상·환경 관측 위성',
   },
 };
@@ -683,16 +834,18 @@ export function getCategoryColor(group) {
   return GROUP_COLORS[group] || '#38bdf8';
 }
 
-export function getGroupLabel(group) {
-  return GROUP_LABELS[group] || '인공위성';
+export function getGroupLabel(group, lang = 'en') {
+  const entry = GROUP_LABELS[group];
+  if (!entry) return lang === 'ko' ? '인공위성' : 'Satellite';
+  return lang === 'ko' ? entry.ko : entry.en;
 }
 
-export function getSatelliteDisplayInfo(noradId, fallbackName) {
+export function getSatelliteDisplayInfo(noradId, fallbackName, lang = 'en') {
   const meta = NOTABLE_SATELLITES[Number(noradId)];
   return {
-    title: meta ? meta.koName : fallbackName,
+    title: meta ? (lang === 'ko' ? meta.koName : meta.enName || fallbackName) : fallbackName,
     originalName: fallbackName,
-    summary: meta ? meta.summary : null,
+    summary: meta ? (lang === 'ko' ? meta.summary : meta.enSummary || null) : null,
     isNotable: Boolean(meta),
   };
 }
@@ -945,7 +1098,38 @@ const ESTIMATED_MODELS = {
   },
 };
 
-export function getSatelliteModelMeta(record) {
+const MODEL_LABELS_EN = {
+  nasa_iss: 'ISS Real CAD',
+  nasa_hubble: 'Hubble Telescope Real CAD',
+  nasa_terra: 'Terra Real CAD',
+  nasa_aqua: 'Aqua Real CAD',
+  nasa_aura: 'Aura Real CAD',
+  nasa_landsat8: 'Landsat 8/9 Real CAD',
+  nasa_suomi_npp: 'JPSS / Suomi NPP Real CAD',
+  nasa_chandra: 'Chandra X-ray Real CAD',
+  nasa_tess: 'TESS Real CAD',
+  nasa_cloudsat: 'CloudSat Real CAD',
+  nasa_calipso: 'CALIPSO Real CAD',
+  nasa_tdrs: 'TDRS Real CAD',
+  nasa_jason: 'Jason Real CAD',
+  tiangong: 'Tiangong T-Shape 3-Module',
+  kompsat_sar: 'KOMPSAT-5 SAR Bus',
+  gk2_weather: 'Single-Wing + Solar Sail Weather',
+  station: 'Space Station Class',
+  earth_obs: 'Optical / Earth Obs Bus',
+  geo_comm: 'GEO Communications Bus',
+  gnss: 'GNSS Navigation Bus',
+  telescope: 'Space Telescope Bus',
+  starlink: 'Starlink Flat-Panel',
+};
+
+const FIDELITY_LABELS_EN = {
+  nasa: 'NASA Official 3D',
+  spec: 'Spec-Accurate 3D',
+  estimated: 'Archetype 3D',
+};
+
+function selectRawModelMeta(record) {
   if (!record) return ESTIMATED_MODELS.earth_obs;
   const name = String(record.name || '').toUpperCase();
   const group = record.group || '';
@@ -1035,6 +1219,7 @@ export function getSatelliteModelMeta(record) {
   if (group === 'starlink' || name.includes('STARLINK')) return ESTIMATED_MODELS.starlink;
   if (
     group === 'gps' ||
+    group === 'gnss' ||
     name.includes('GPS') ||
     name.includes('NAVSTAR') ||
     name.includes('GALILEO') ||
@@ -1049,4 +1234,15 @@ export function getSatelliteModelMeta(record) {
   }
   return ESTIMATED_MODELS.earth_obs;
 }
+
+export function getSatelliteModelMeta(record, lang = 'en') {
+  const base = selectRawModelMeta(record);
+  if (lang === 'ko') return base;
+  return {
+    ...base,
+    label: MODEL_LABELS_EN[base.key] || base.label,
+    fidelityLabel: FIDELITY_LABELS_EN[base.fidelity] || base.fidelityLabel,
+  };
+}
+
 

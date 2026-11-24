@@ -2,14 +2,18 @@ import {
   CATEGORIES,
   OBSERVER_PRESETS,
   getCategoryColor,
+  getCategoryLabel,
   getGroupLabel,
   getLaunchSiteLabel,
+  getObserverPresetName,
+  getObserverShortName,
   getOpsStatusInfo,
   getOwnerLabel,
   getRcsSizeLabel,
   getSatelliteDisplayInfo,
   getSatelliteModelMeta,
 } from '../orbital/catalog.js';
+import { applyStaticTranslations, getLang, t } from './i18n.js';
 import { ICONS } from './icons.js';
 
 function fmtCoord(val, posHem, negHem) {
@@ -17,39 +21,77 @@ function fmtCoord(val, posHem, negHem) {
   return `${Math.abs(val).toFixed(4)}° ${hem}`;
 }
 
-function fmtKstTime(date) {
-  return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    month: '2-digit',
+function fmtPassTime(date) {
+  if (getLang() === 'ko') {
+    return (
+      new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(date) + ' KST'
+    );
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
+    timeZoneName: 'short',
   }).format(date);
 }
 
 const SPEED_STEPS = [1, 10, 60, 300, 1000];
 
-function fmtClockKst(date, compact = false) {
+function fmtClockLocal(date, compact = false) {
+  if (getLang() === 'ko') {
+    if (compact) {
+      return (
+        new Intl.DateTimeFormat('ko-KR', {
+          timeZone: 'Asia/Seoul',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }).format(date) + ' KST'
+      );
+    }
+    return (
+      new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(date) + ' KST'
+    );
+  }
   if (compact) {
-    return new Intl.DateTimeFormat('ko-KR', {
-      timeZone: 'Asia/Seoul',
+    return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
       hour12: false,
+      timeZoneName: 'short',
     }).format(date);
   }
-  return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
-    month: '2-digit',
+    month: 'short',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
+    timeZoneName: 'short',
   }).format(date);
 }
 
@@ -64,10 +106,13 @@ export class HudController {
     this.lastRenderedIds = '';
     this.pendingEngineAfterKey = null;
     this.currentSpeed = 1;
+    this.hasApiKey = false;
+    this.isFollowing = false;
     this.telemetryExpanded = false;
     this.mobileMq = window.matchMedia('(max-width: 768px)');
     this.cacheDom();
     this.injectIcons();
+    applyStaticTranslations();
     this.renderCategoryTabs();
     this.renderObserverPresets();
     this.bindEvents();
@@ -99,6 +144,7 @@ export class HudController {
       engGoogleTiles: $('eng-google-tiles'),
       engGoogleNative: $('eng-google-native'),
       mobileEngineOptions: $('mobile-engine-options'),
+      btnLangToggle: $('btn-lang-toggle'),
       btnLayers: $('btn-layers'),
       btnCloseLayers: $('btn-close-layers'),
       layersPopover: $('layers-popover'),
@@ -301,23 +347,38 @@ export class HudController {
     this.el.mobileBackdrop.hidden = !(drawerOpen || layersOpen);
   }
 
-  renderCategoryTabs() {
+  renderCategoryTabs(activeId = null) {
+    const lang = getLang();
+    const current = activeId || this.el.categoryTabs.querySelector('.cat-tab.active')?.dataset.category || CATEGORIES[0].id;
     this.el.categoryTabs.innerHTML = CATEGORIES.map(
-      (cat, idx) => `
-      <button class="cat-tab${idx === 0 ? ' active' : ''}" data-category="${cat.id}" role="tab">
+      (cat) => `
+      <button class="cat-tab${cat.id === current ? ' active' : ''}" data-category="${cat.id}" role="tab">
         <span class="cat-dot" style="background:${cat.color}"></span>
-        <span>${cat.label}</span>
+        <span>${getCategoryLabel(cat, lang)}</span>
       </button>`
     ).join('');
   }
 
-  renderObserverPresets() {
-    this.el.observerSelect.innerHTML = OBSERVER_PRESETS.map(
-      (obs) => `<option value="${obs.id}">${obs.name}</option>`
+  renderObserverPresets(selectedId = null) {
+    const lang = getLang();
+    const current = selectedId || this.el.observerSelect.value || OBSERVER_PRESETS[0].id;
+    const hasCustomGps = current === 'gps';
+    let html = OBSERVER_PRESETS.map(
+      (obs) => `<option value="${obs.id}">${getObserverPresetName(obs, lang)}</option>`
     ).join('');
+    if (hasCustomGps) {
+      html += `<option value="gps">${t('myLocation')}</option>`;
+    }
+    this.el.observerSelect.innerHTML = html;
+    this.el.observerSelect.value = current;
   }
 
   bindEvents() {
+    // Bilingual EN / KO toggle
+    this.el.btnLangToggle?.addEventListener('click', () => {
+      this.cb.onToggleLanguage?.();
+    });
+
     // Sync layout when crossing mobile/desktop breakpoint
     this.mobileMq.addEventListener?.('change', () => {
       this.updateDrawerCloseIcon();
@@ -641,9 +702,25 @@ export class HudController {
     this.el.inputTleText.value = '';
   }
 
+  refreshLanguage(activeCategory = null, observerId = null) {
+    applyStaticTranslations();
+    this.renderCategoryTabs(activeCategory);
+    this.renderObserverPresets(observerId);
+    this.setApiKeyState(this.hasApiKey);
+    this.setFollowState(this.isFollowing);
+    if (this.is3dModelLoading) {
+      this.set3dModelLoading(true);
+    } else {
+      this.set3dModelActiveState(Boolean(this.last3dActive));
+    }
+    this.lastRenderedIds = '';
+    this.lastPassSig = '';
+  }
+
   setApiKeyState(hasKey) {
-    this.el.btnApiKey.classList.toggle('active', hasKey);
-    this.el.apiKeyLabel.textContent = hasKey ? 'Google API 연결됨' : 'Google API 키';
+    this.hasApiKey = Boolean(hasKey);
+    this.el.btnApiKey.classList.toggle('active', this.hasApiKey);
+    this.el.apiKeyLabel.textContent = this.hasApiKey ? t('apiKeyConnected') : t('apiKeyBtn');
   }
 
   setActiveCategory(categoryId) {
@@ -687,7 +764,7 @@ export class HudController {
     if (!this.el.scrubberOffsetLabel) return;
     const rounded = Math.round(offsetMinutes);
     if (Math.abs(rounded) < 1) {
-      this.el.scrubberOffsetLabel.textContent = '실시간 (0분)';
+      this.el.scrubberOffsetLabel.textContent = t('scrubberLive');
       return;
     }
     const sign = rounded > 0 ? '+' : '-';
@@ -695,7 +772,9 @@ export class HudController {
     const h = Math.floor(abs / 60);
     const m = abs % 60;
     this.el.scrubberOffsetLabel.textContent =
-      h > 0 ? `${sign}${h}시간 ${String(m).padStart(2, '0')}분` : `${sign}${m}분`;
+      h > 0
+        ? t('scrubberHrMin', { sign, h, m: String(m).padStart(2, '0') })
+        : t('scrubberMin', { sign, m });
   }
 
   syncScrubberFromSimTime(simTimeMs) {
@@ -707,15 +786,18 @@ export class HudController {
   }
 
   setFollowState(following) {
-    this.el.btnFollow.classList.toggle('active', following);
-    this.el.btnFollow.querySelector('span:last-child').textContent = following ? '추적 중' : '카메라 추적';
+    this.isFollowing = Boolean(following);
+    this.el.btnFollow.classList.toggle('active', this.isFollowing);
+    this.el.btnFollow.querySelector('span:last-child').textContent = this.isFollowing
+      ? t('btnFollowing')
+      : t('btnFollow');
   }
 
   setFavoriteState(isFav) {
     if (!this.el.btnFavorite) return;
     this.el.btnFavorite.classList.toggle('is-favorite', isFav);
     this.el.btnFavorite.innerHTML = isFav ? ICONS.starFilled : ICONS.star;
-    this.el.btnFavorite.title = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+    this.el.btnFavorite.title = isFav ? t('favoriteRemoveTitle') : t('favoriteAddTitle');
   }
 
   set3dModelLoading(isLoading) {
@@ -724,7 +806,7 @@ export class HudController {
     if (this.is3dModelLoading) {
       this.el.telModelLod.classList.remove('active-3d');
       this.el.telModelLod.classList.add('loading-3d');
-      this.el.telModelLod.textContent = '3D 모델 불러오는 중...';
+      this.el.telModelLod.textContent = t('model3dLoading');
     } else {
       this.el.telModelLod.classList.remove('loading-3d');
       this.set3dModelActiveState(Boolean(this.last3dActive));
@@ -735,7 +817,7 @@ export class HudController {
     this.last3dActive = Boolean(is3dActive);
     if (!this.el.telModelLod || this.is3dModelLoading) return;
     this.el.telModelLod.classList.toggle('active-3d', is3dActive);
-    this.el.telModelLod.textContent = is3dActive ? '3D 실물 표시 중' : '줌인 시 3D 실물 표시';
+    this.el.telModelLod.textContent = is3dActive ? t('model3dActive') : t('model3dZoomHint');
   }
 
   setSyncStatus(text) {
@@ -743,9 +825,7 @@ export class HudController {
   }
 
   updateClock(simDate) {
-    this.el.clockKst.textContent = this.isMobile()
-      ? `${fmtClockKst(simDate, true)} KST`
-      : `${fmtClockKst(simDate, false)} KST`;
+    this.el.clockKst.textContent = fmtClockLocal(simDate, this.isMobile());
     this.el.clockUtc.textContent = fmtClockUtc(simDate);
     this.syncScrubberFromSimTime(simDate.getTime());
   }
@@ -759,14 +839,18 @@ export class HudController {
     isFavoritesTab = false,
     listRevision = 0
   ) {
+    const lang = getLang();
     this.el.listCountText.textContent = isFavoritesTab
-      ? `즐겨찾기 ${records.length.toLocaleString()}기`
-      : `표시 ${records.length.toLocaleString()}기 / 전체 ${totalCount.toLocaleString()}기`;
+      ? t('listFavCount', { count: records.length.toLocaleString() })
+      : t('listTotalCount', {
+          shown: records.length.toLocaleString(),
+          total: totalCount.toLocaleString(),
+        });
 
     const favSig = [...favoriteIds].sort((a, b) => a - b).join('.');
     const firstId = records[0]?.id ?? 0;
     const lastId = records[records.length - 1]?.id ?? 0;
-    const idSig = `${listRevision}|${records.length}|${firstId}|${lastId}|${favSig}|${isFavoritesTab ? '1' : '0'}`;
+    const idSig = `${lang}|${listRevision}|${records.length}|${firstId}|${lastId}|${favSig}|${isFavoritesTab ? '1' : '0'}`;
 
     this.currentListRecords = records;
     this.currentListSelectedId = selectedId;
@@ -780,8 +864,8 @@ export class HudController {
 
       if (records.length === 0) {
         this.el.satList.innerHTML = isFavoritesTab
-          ? `<div class="empty-list">즐겨찾기한 위성이 아직 없습니다.<br/>위성 상세 패널의 ★ 버튼으로 관심 위성을 등록해 보세요.</div>`
-          : `<div class="empty-list">일치하는 위성이 없습니다.<br/>위성 이름 또는 NORAD ID 입력 후 Enter로 CelesTrak 전체 DB를 실시간 조회할 수 있습니다.</div>`;
+          ? `<div class="empty-list">${t('emptyFavHtml')}</div>`
+          : `<div class="empty-list">${t('emptySearchHtml')}</div>`;
         return;
       }
 
@@ -804,6 +888,7 @@ export class HudController {
     const records = this.currentListRecords;
     if (!records || this.renderedBatchCount >= records.length) return;
 
+    const lang = getLang();
     const start = this.renderedBatchCount;
     const end = Math.min(start + batchSize, records.length);
     const selectedId = this.currentListSelectedId;
@@ -813,7 +898,7 @@ export class HudController {
     const frag = document.createDocumentFragment();
     for (let i = start; i < end; i++) {
       const rec = records[i];
-      const info = getSatelliteDisplayInfo(rec.id, rec.name);
+      const info = getSatelliteDisplayInfo(rec.id, rec.name, lang);
       const color = getCategoryColor(rec.group);
       const isFav = favoriteIds.has(rec.id);
       const pos = positionsMap?.get(rec.id);
@@ -829,7 +914,7 @@ export class HudController {
             <div class="sat-item-meta">
               <span class="mono">#${rec.id}</span>
               <span>·</span>
-              <span>${getGroupLabel(rec.group)}</span>
+              <span>${getGroupLabel(rec.group, lang)}</span>
             </div>
           </div>
         </div>
@@ -860,12 +945,13 @@ export class HudController {
       return;
     }
 
+    const lang = getLang();
     this.el.telemetryPanel.hidden = false;
     this.setFavoriteState(isFav);
-    const info = getSatelliteDisplayInfo(record.id, record.name);
+    const info = getSatelliteDisplayInfo(record.id, record.name, lang);
 
     this.el.telRegime.textContent = record.regime;
-    this.el.telGroup.textContent = getGroupLabel(record.group);
+    this.el.telGroup.textContent = getGroupLabel(record.group, lang);
     this.el.telNorad.textContent = `NORAD ${record.id}`;
     if (this.el.telPeekAlt) {
       this.el.telPeekAlt.textContent = `${Math.round(pos.altKm).toLocaleString()} km · ${pos.speedKmS.toFixed(1)} km/s`;
@@ -883,7 +969,7 @@ export class HudController {
       this.el.telSummary.hidden = true;
     }
 
-    const modelMeta = getSatelliteModelMeta(record);
+    const modelMeta = getSatelliteModelMeta(record, lang);
     if (this.el.telModelType) {
       this.el.telModelType.innerHTML = `
         <span>${escapeHtml(modelMeta.label)}</span>
@@ -902,22 +988,23 @@ export class HudController {
 
     // SATCAT official metadata
     if (this.el.telOwner) {
-      this.el.telOwner.textContent = getOwnerLabel(record.owner);
-      this.el.telLaunchDate.textContent = record.launchDate || '정보 없음';
-      this.el.telLaunchSite.textContent = getLaunchSiteLabel(record.launchSite);
-      this.el.telRcs.textContent = getRcsSizeLabel(record.rcs);
-      const ops = getOpsStatusInfo(record.opsStatus);
+      this.el.telOwner.textContent = getOwnerLabel(record.owner, lang);
+      this.el.telLaunchDate.textContent = record.launchDate || t('unknownValue');
+      this.el.telLaunchSite.textContent = getLaunchSiteLabel(record.launchSite, lang);
+      this.el.telRcs.textContent = getRcsSizeLabel(record.rcs, lang);
+      const ops = getOpsStatusInfo(record.opsStatus, lang);
       this.el.telOpsStatus.textContent = ops.label;
       this.el.telOpsStatus.className = `ops-pill ${ops.tone}`;
     }
 
     if (observer && look) {
-      this.el.telObserverHeading.textContent = `관측소 시선각 (${observer.name.split(' ')[0]})`;
+      const obsShort = getObserverShortName(observer, lang);
+      this.el.telObserverHeading.textContent = `${t('secObserverPrefix')} (${obsShort})`;
       this.el.telAz.textContent = `${look.azimuthDeg.toFixed(1)}° ${look.compass}`;
       this.el.telEl.textContent = `${look.elevationDeg.toFixed(1)}°`;
       this.el.telRange.textContent = `${Math.round(look.rangeKm).toLocaleString()} km`;
       this.el.telVisibilityPill.classList.toggle('visible', look.visible);
-      this.el.telVisibilityPill.textContent = look.visible ? '현재 가시권 (상공)' : '지평선 아래';
+      this.el.telVisibilityPill.textContent = look.visible ? t('visAboveHorizon') : t('visBelowHorizon');
     }
 
     // Real-time naked-eye astronomical visual visibility judgment
@@ -934,15 +1021,18 @@ export class HudController {
       this.el.telVisualBadge.textContent = visual.label;
       this.el.telVisualBadge.className = `visual-badge ${tone}`;
       this.el.telVisualDetail.textContent = visual.detail;
-      this.el.telSunlitTag.textContent = visual.sunlit ? '☀ 태양빛 반사 중' : '🌑 지구 그림자 (식)';
+      this.el.telSunlitTag.textContent = visual.sunlit ? t('visualSunlit') : t('visualUmbra');
       this.el.telSunlitTag.className = `visual-chip ${visual.sunlit ? 'lit' : 'dark'}`;
       this.el.telSkyTag.textContent = `${visual.skyLabel} (${visual.sunElDeg.toFixed(0)}°)`;
       this.el.telSkyTag.className = `visual-chip ${visual.skyState === 'day' ? 'day' : 'night'}`;
       if (visual.estMag !== null) {
         const sign = visual.estMag > 0 ? '+' : '';
-        this.el.telMagTag.textContent = `약 ${sign}${visual.estMag.toFixed(1)}등급`;
+        this.el.telMagTag.textContent =
+          lang === 'ko'
+            ? `약 ${sign}${visual.estMag.toFixed(1)}등급`
+            : `Mag ${sign}${visual.estMag.toFixed(1)}`;
       } else {
-        this.el.telMagTag.textContent = '밝기 --';
+        this.el.telMagTag.textContent = t('visualMagUnknown');
       }
     }
 
@@ -952,65 +1042,78 @@ export class HudController {
   }
 
   renderPassInfo(pass) {
+    const lang = getLang();
     const sig = pass
-      ? `${pass.status}|${pass.aos ? pass.aos.getTime() : 0}|${pass.passes?.length || 0}|${Math.round(pass.maxElevationDeg || 0)}|${pass.passes?.map((p) => p.visual?.status || '').join(',')}`
-      : 'null';
+      ? `${lang}|${pass.status}|${pass.aos ? pass.aos.getTime() : 0}|${pass.passes?.length || 0}|${Math.round(pass.maxElevationDeg || 0)}|${pass.passes?.map((p) => p.visual?.status || '').join(',')}`
+      : `${lang}|null`;
     if (sig === this.lastPassSig) return;
     this.lastPassSig = sig;
 
     if (!pass || pass.status === 'UNAVAILABLE') {
-      this.el.telPassBox.textContent = '통과 예측 정보를 계산할 수 없습니다.';
+      this.el.telPassBox.textContent = t('passUnavailable');
       return;
     }
     if (pass.status === 'GEO_ALWAYS_VISIBLE') {
-      this.el.telPassBox.innerHTML = `정지궤도(GEO) 위성 — 관측소에서 상시 관측 가능 (고도각 <strong>${pass.maxElevationDeg.toFixed(1)}°</strong>)`;
+      this.el.telPassBox.innerHTML = t('passGeoAlways', { el: pass.maxElevationDeg.toFixed(1) });
       return;
     }
     if (pass.status === 'GEO_BELOW_HORIZON') {
-      this.el.telPassBox.textContent = '정지궤도(GEO) 위성 — 현재 관측소 지평선 아래에 고정되어 있습니다.';
+      this.el.telPassBox.textContent = t('passGeoBelow');
       return;
     }
     if (pass.status === 'NO_PASS_24H') {
-      this.el.telPassBox.textContent = '향후 48시간 내 관측소 상공 통과 예정이 없습니다.';
+      this.el.telPassBox.textContent = t('passNone48h');
       return;
     }
 
     const list = Array.isArray(pass.passes) && pass.passes.length > 0 ? pass.passes : [pass];
     const nakedCount = list.filter((item) => item.visual?.canSeeNakedEye).length;
+    const heading =
+      nakedCount > 0
+        ? t('passListHeadingNaked', { count: list.length, naked: nakedCount })
+        : t('passListHeading', { count: list.length });
+
     this.el.telPassBox.innerHTML = `
-      <div class="pass-list-heading">향후 48시간 상공 통과 일정 (${list.length}회${nakedCount > 0 ? ` · ★ 육안 관측 ${nakedCount}회` : ''})</div>
+      <div class="pass-list-heading">${heading}</div>
       <div class="pass-list">
         ${list
           .map((item, idx) => {
             const isNow = item.status === 'VISIBLE_NOW';
-            const aosStr = item.aos ? fmtKstTime(item.aos) : '--';
-            const durMin = item.durationSec ? `${Math.max(1, Math.round(item.durationSec / 60))}분` : '';
+            const aosStr = item.aos ? fmtPassTime(item.aos) : '--';
+            const durMin = item.durationSec
+              ? t('passDurMin', { min: Math.max(1, Math.round(item.durationSec / 60)) })
+              : '';
             const jumpMs = item.maxTime ? item.maxTime.getTime() : item.aos ? item.aos.getTime() : 0;
             const v = item.visual;
             let visBadgeHtml = '';
             if (v?.status === 'VISIBLE_NAKED_EYE') {
-              const magTxt = v.estMag !== null ? ` ${v.estMag > 0 ? '+' : ''}${v.estMag.toFixed(1)}등` : '';
-              visBadgeHtml = `<span class="pass-vis-tag naked">★ 육안${magTxt}</span>`;
+              const magTxt =
+                v.estMag !== null
+                  ? lang === 'ko'
+                    ? ` ${v.estMag > 0 ? '+' : ''}${v.estMag.toFixed(1)}등`
+                    : ` ${v.estMag > 0 ? '+' : ''}${v.estMag.toFixed(1)}`
+                  : '';
+              visBadgeHtml = `<span class="pass-vis-tag naked">${t('passTagNaked')}${magTxt}</span>`;
             } else if (v?.status === 'VISIBLE_BINOCULAR') {
-              visBadgeHtml = `<span class="pass-vis-tag bino">쌍안경</span>`;
+              visBadgeHtml = `<span class="pass-vis-tag bino">${t('passTagBino')}</span>`;
             } else if (v?.status === 'IN_EARTH_SHADOW') {
-              visBadgeHtml = `<span class="pass-vis-tag dim">식</span>`;
+              visBadgeHtml = `<span class="pass-vis-tag dim">${t('passTagShadow')}</span>`;
             } else if (v?.status === 'DAYTIME_SKY') {
-              visBadgeHtml = `<span class="pass-vis-tag dim">주간</span>`;
+              visBadgeHtml = `<span class="pass-vis-tag dim">${t('passTagDay')}</span>`;
             }
             return `
               <div class="pass-row${idx === 0 ? ' is-next' : ''}${v?.canSeeNakedEye ? ' is-naked-eye' : ''}">
                 <div class="pass-row-info">
                   <div class="pass-row-top">
-                    <span class="pass-tag${isNow ? ' live' : ''}">${isNow ? '통과 중' : `#${idx + 1}`}</span>
-                    <span class="pass-el">최대 <strong>${item.maxElevationDeg.toFixed(0)}°</strong>${durMin ? ` · ${durMin}` : ''}</span>
+                    <span class="pass-tag${isNow ? ' live' : ''}">${isNow ? t('passNowTag') : `#${idx + 1}`}</span>
+                    <span class="pass-el">${t('passMaxEl', { el: item.maxElevationDeg.toFixed(0) })}${durMin}</span>
                     ${visBadgeHtml}
                   </div>
-                  <div class="pass-time mono">${aosStr} KST</div>
+                  <div class="pass-time mono">${aosStr}</div>
                 </div>
                 ${
                   jumpMs
-                    ? `<button class="pass-jump-btn" data-time-ms="${jumpMs}" title="이 통과 시각으로 시뮬레이션 이동">이동</button>`
+                    ? `<button class="pass-jump-btn" data-time-ms="${jumpMs}" title="${escapeHtml(t('passJumpTitle'))}">${t('passJumpBtn')}</button>`
                     : ''
                 }
               </div>
@@ -1026,7 +1129,7 @@ export class HudController {
       this.el.satTooltip.hidden = true;
       return;
     }
-    const info = getSatelliteDisplayInfo(record.id, record.name);
+    const info = getSatelliteDisplayInfo(record.id, record.name, getLang());
     this.el.satTooltip.hidden = false;
     this.el.satTooltip.style.left = `${screenPos.x}px`;
     this.el.satTooltip.style.top = `${screenPos.y}px`;

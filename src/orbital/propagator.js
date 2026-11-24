@@ -1,4 +1,5 @@
 import * as satellite from 'satellite.js';
+import { t } from '../ui/i18n.js';
 
 const EARTH_RADIUS_KM = 6378.137;
 const MU_KM3_S2 = 398600.4418;
@@ -53,12 +54,12 @@ export function buildRecordFromTle(tleText, group = 'custom') {
     line1 = lines[0];
     line2 = lines[1];
   } else {
-    throw new Error('올바른 TLE 형식(1번/2번 라인)이 아닙니다.');
+    throw new Error(t('errInvalidTleFormat'));
   }
 
   const satrec = satellite.twoline2satrec(line1, line2);
   if (!satrec || satrec.error !== 0) {
-    throw new Error('TLE 궤도 요소 파싱에 실패했습니다.');
+    throw new Error(t('errInvalidTleParse'));
   }
 
   const noradId = Number(line1.slice(2, 7).trim()) || Math.floor(900000 + Math.random() * 90000);
@@ -423,16 +424,16 @@ export function computeVisualVisibility(record, pos, look, observer, date) {
   const sunElDeg = computeSolarElevationDeg(observer, date, sunEci);
 
   let skyState = 'night';
-  let skyLabel = '완전 야간';
+  let skyLabel = t('skyNight');
   if (sunElDeg > 0) {
     skyState = 'day';
-    skyLabel = '주간 (낮)';
+    skyLabel = t('skyDay');
   } else if (sunElDeg > -6) {
     skyState = 'civil';
-    skyLabel = '시민 박명';
+    skyLabel = t('skyCivil');
   } else if (sunElDeg > -18) {
     skyState = 'nautical';
-    skyLabel = '박명 (관측 최적)';
+    skyLabel = t('skyNautical');
   }
 
   // Estimate apparent visual magnitude using Lambertian phase function + SATCAT RCS
@@ -486,37 +487,40 @@ export function computeVisualVisibility(record, pos, look, observer, date) {
   }
 
   let status = 'BELOW_HORIZON';
-  let label = '지평선 아래';
-  let detail = '현재 관측소 지평선 아래에 위치해 보이지 않습니다.';
+  let label = t('visStatusBelow');
+  let detail = t('visDetailBelow');
   let canSeeNakedEye = false;
 
   if (look.elevationDeg <= 0) {
     status = 'BELOW_HORIZON';
-    label = '지평선 아래';
-    detail = '현재 관측소 상공을 지나고 있지 않습니다.';
+    label = t('visStatusBelow');
+    detail = t('visDetailBelow');
   } else if (!sunlit) {
     status = 'IN_EARTH_SHADOW';
-    label = '지구 그림자 (식 상태)';
-    detail = '상공을 통과 중이지만 지구 그림자에 가려 태양빛을 반사하지 못합니다.';
+    label = t('visStatusShadow');
+    detail = t('visDetailShadow');
   } else if (sunElDeg > -1) {
     status = 'DAYTIME_SKY';
-    label = '주간 하늘 · 관측 불가';
-    detail = `위성은 태양빛을 받고 있으나 관측소 하늘이 밝아(태양 고도 ${sunElDeg.toFixed(1)}°) 육안 관측이 어렵습니다.`;
+    label = t('visStatusDay');
+    detail = t('visDetailDay', { sunEl: sunElDeg.toFixed(1) });
   } else {
     const nakedLimit = sunElDeg > -6 ? 1.5 : 5.5;
     if (estMag !== null && estMag <= nakedLimit && look.elevationDeg >= 8) {
       status = 'VISIBLE_NAKED_EYE';
       canSeeNakedEye = true;
-      label = '육안 관측 가능!';
-      detail = `태양빛 반사 중 + 어두운 하늘 조건 충족 (추정 밝기 ${estMag > 0 ? '+' : ''}${estMag.toFixed(1)}등급)`;
+      const magStr = `${estMag > 0 ? '+' : ''}${estMag.toFixed(1)}`;
+      label = t('visStatusNaked');
+      detail = t('visDetailNaked', { mag: magStr });
     } else if (estMag !== null && estMag <= 8.5) {
       status = 'VISIBLE_BINOCULAR';
-      label = '쌍안경 관측 가능';
-      detail = `맨눈으로는 희미하나 쌍안경으로 관측 가능 (추정 밝기 +${estMag.toFixed(1)}등급)`;
+      const magStr = `+${estMag.toFixed(1)}`;
+      label = t('visStatusBino');
+      detail = t('visDetailBino', { mag: magStr });
     } else {
       status = 'TOO_FAINT';
-      label = '매우 어두움 (망원경 필요)';
-      detail = `거리·크기 특성상 맨눈 관측이 어렵습니다${estMag !== null ? ` (추정 +${estMag.toFixed(1)}등급)` : ''}.`;
+      const magSuffix = estMag !== null ? ` (mag +${estMag.toFixed(1)})` : '';
+      label = t('visStatusFaint');
+      detail = t('visDetailFaint', { magSuffix });
     }
   }
 

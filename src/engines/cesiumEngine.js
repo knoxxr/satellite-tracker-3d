@@ -2,9 +2,11 @@ import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import {
   getCategoryColor,
+  getObserverShortName,
   getSatelliteDisplayInfo,
   getSatelliteModelMeta,
 } from '../orbital/catalog.js';
+import { getLang, t } from '../ui/i18n.js';
 
 const BASE_URL = import.meta.env.BASE_URL || '/';
 const CESIUM_ASSETS_URL = `${BASE_URL}cesium/`;
@@ -22,17 +24,17 @@ const DEFAULT_ORBIT_POS = Cesium.Cartesian3.fromDegrees(127.0, 37.5, 420000);
 
 const BASEMAPS = {
   'google-hybrid': {
-    label: 'Google 위성 + 지명',
+    label: 'Google Hybrid',
     create: () =>
       new Cesium.UrlTemplateImageryProvider({
-        url: 'https://mt{s}.google.com/vt/lyrs=y&hl=ko&x={x}&y={y}&z={z}',
+        url: `https://mt{s}.google.com/vt/lyrs=y&hl=${getLang()}&x={x}&y={y}&z={z}`,
         subdomains: ['0', '1', '2', '3'],
         maximumLevel: 20,
         credit: new Cesium.Credit('Map data © Google'),
       }),
   },
   'google-satellite': {
-    label: 'Google 위성 영상',
+    label: 'Google Satellite',
     create: () =>
       new Cesium.UrlTemplateImageryProvider({
         url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
@@ -42,7 +44,7 @@ const BASEMAPS = {
       }),
   },
   'esri-imagery': {
-    label: 'Esri 위성 영상',
+    label: 'Esri Satellite',
     create: () =>
       new Cesium.UrlTemplateImageryProvider({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -51,7 +53,7 @@ const BASEMAPS = {
       }),
   },
   dark: {
-    label: '다크 벡터 지도',
+    label: 'Dark Vector',
     create: () =>
       new Cesium.UrlTemplateImageryProvider({
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
@@ -430,7 +432,7 @@ export class CesiumSatelliteEngine {
     this.observerLabel = this.observerLabels.add({
       show: false,
       position: DEFAULT_SURFACE_POS,
-      text: '서울',
+      text: 'Seoul',
       font: '600 11px Inter, "Noto Sans KR", sans-serif',
       fillColor: Cesium.Color.fromCssColorString('#d1fae5'),
       outlineColor: Cesium.Color.fromCssColorString('#05080f'),
@@ -464,7 +466,7 @@ export class CesiumSatelliteEngine {
     this.velocityLabel = this.observerLabels.add({
       show: false,
       position: DEFAULT_ORBIT_POS,
-      text: '진행 방향',
+      text: t('vecVelocity'),
       font: '600 10.5px Inter, "Noto Sans KR", sans-serif',
       fillColor: Cesium.Color.fromCssColorString('#bae6fd'),
       outlineColor: Cesium.Color.fromCssColorString('#05080f'),
@@ -479,7 +481,7 @@ export class CesiumSatelliteEngine {
     this.nadirLabel = this.observerLabels.add({
       show: false,
       position: DEFAULT_ORBIT_POS,
-      text: '지구 방향',
+      text: t('vecNadir'),
       font: '600 10.5px Inter, "Noto Sans KR", sans-serif',
       fillColor: Cesium.Color.fromCssColorString('#fde68a'),
       outlineColor: Cesium.Color.fromCssColorString('#05080f'),
@@ -574,7 +576,7 @@ export class CesiumSatelliteEngine {
     }
 
     if (!apiKey || !apiKey.trim()) {
-      return { ok: false, error: 'Google Maps API 키를 먼저 입력해 주세요.' };
+      return { ok: false, error: t('errApiKeyRequired') };
     }
 
     try {
@@ -597,7 +599,7 @@ export class CesiumSatelliteEngine {
       this.viewer.scene.globe.show = true;
       return {
         ok: false,
-        error: `Google Photorealistic 3D Tiles 로드 실패: ${err.message || 'Map Tiles API 활성화 및 API 키를 확인하세요.'}`,
+        error: t('errTilesFail', { msg: err.message || 'Check Map Tiles API & API key.' }),
       };
     }
   }
@@ -629,8 +631,29 @@ export class CesiumSatelliteEngine {
     this.observerPoint.position = pos;
     this.observerPoint.show = true;
     this.observerLabel.position = pos;
-    this.observerLabel.text = observer.name.split(' ')[0];
+    this.observerLabel.text = getObserverShortName(observer, getLang());
     this.observerLabel.show = true;
+  }
+
+  refreshLanguageLabels() {
+    const lang = getLang();
+    if (this.velocityLabel) this.velocityLabel.text = t('vecVelocity');
+    if (this.nadirLabel) this.nadirLabel.text = t('vecNadir');
+    if (this.observer && this.observerLabel) {
+      this.observerLabel.text = getObserverShortName(this.observer, lang);
+    }
+    for (const entry of this.satPrimitives.values()) {
+      const info = getSatelliteDisplayInfo(entry.record.id, entry.record.name, lang);
+      const shortTitle = info.isNotable ? info.title.split(' (')[0] : entry.record.name;
+      entry.titleShort = shortTitle;
+      if (entry.label) entry.label.text = shortTitle;
+    }
+    if (this.selectedId && this.selectedLabel && this.satPrimitives.has(this.selectedId)) {
+      this.selectedLabel.text = this.satPrimitives.get(this.selectedId).titleShort;
+    }
+    if (!this.google3dEnabled && this.currentBasemap === 'google-hybrid') {
+      this.setBasemap('google-hybrid');
+    }
   }
 
   getCachedColor(hexColor, alpha = 0.9) {
@@ -651,6 +674,7 @@ export class CesiumSatelliteEngine {
     this.selectedLabel = null;
     this.hoveredLabel = null;
 
+    const lang = getLang();
     this.massRenderMode = records.length > 500;
     const showLabelsByDefault = records.length <= 45;
     const outlineDark = Cesium.Color.fromCssColorString('#05080f');
@@ -695,7 +719,7 @@ export class CesiumSatelliteEngine {
 
       for (const rec of records) {
         const color = getCategoryColor(rec.group);
-        const info = getSatelliteDisplayInfo(rec.id, rec.name);
+        const info = getSatelliteDisplayInfo(rec.id, rec.name, lang);
         const point = this.satPoints.add({
           show: false,
           position: DEFAULT_ORBIT_POS,
@@ -742,7 +766,7 @@ export class CesiumSatelliteEngine {
     for (const rec of records) {
       const color = getCategoryColor(rec.group);
       const isSelected = rec.id === this.selectedId;
-      const info = getSatelliteDisplayInfo(rec.id, rec.name);
+      const info = getSatelliteDisplayInfo(rec.id, rec.name, lang);
 
       const billboard = this.billboards.add({
         show: false,
