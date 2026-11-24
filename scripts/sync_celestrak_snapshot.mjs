@@ -28,7 +28,7 @@ const CELESTRAK_BASE = 'https://celestrak.org/NORAD/elements/gp.php';
 const SATCAT_CSV_URL = 'https://celestrak.org/pub/satcat.csv';
 const USER_AGENT = 'OrbitPulse-3D-CDN-Snapshot-Sync/2.1 (+https://github.com/knoxxr/satellite-tracker-3d)';
 const MIN_AGE_MS = 2 * 60 * 60 * 1000; // Respect CelesTrak 2-hour update cadence
-const SCHEMA_VERSION = 2; // v2 includes SATCAT metadata + brightIds
+const SCHEMA_VERSION = 3; // v3 includes full SATCAT metadata (Accept: */*) + brightIds
 const FORCE = process.argv.includes('--force');
 
 async function fetchTextViaCurl(url, timeoutSec = 60, accept = 'application/json') {
@@ -198,7 +198,7 @@ async function main() {
   const tSatcat = Date.now();
   let satcatMap = new Map();
   try {
-    const csvText = await fetchText(SATCAT_CSV_URL, 45, 'text/csv');
+    const csvText = await fetchText(SATCAT_CSV_URL, 45, '*/*');
     satcatMap = parseSatcatCsv(csvText);
     console.log(
       `[sync] SATCAT CSV parsed: ${satcatMap.size.toLocaleString()} catalog entries in ${((Date.now() - tSatcat) / 1000).toFixed(1)}s`
