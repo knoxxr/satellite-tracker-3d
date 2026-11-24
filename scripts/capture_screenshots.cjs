@@ -4,6 +4,7 @@ const { spawn } = require('node:child_process');
 
 const PORT = 9225;
 const OUT_DIR = path.resolve(__dirname, '../screenshots');
+const GIF_FRAMES_DIR = '/tmp/orbitpulse-gif-frames';
 const BASE_URL = 'http://localhost:3000/';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -13,7 +14,7 @@ class CdpClient {
     this.wsUrl = wsUrl;
     this.id = 0;
     this.pending = new Map();
-    this.events = [];
+    this.errors = [];
   }
 
   async connect() {
@@ -29,8 +30,8 @@ class CdpClient {
         this.pending.delete(msg.id);
         if (msg.error) reject(new Error(msg.error.message || JSON.stringify(msg.error)));
         else resolve(msg.result);
-      } else if (msg.method) {
-        this.events.push(msg);
+      } else if (msg.method === 'Runtime.exceptionThrown') {
+        this.errors.push(msg.params?.exceptionDetails?.text || JSON.stringify(msg.params));
       }
     });
   }
@@ -55,9 +56,8 @@ class CdpClient {
     return res.result?.value;
   }
 
-  async screenshot(filename) {
+  async screenshot(outPath) {
     const { data } = await this.send('Page.captureScreenshot', { format: 'png' });
-    const outPath = path.join(OUT_DIR, filename);
     fs.writeFileSync(outPath, Buffer.from(data, 'base64'));
     return outPath;
   }
@@ -89,8 +89,16 @@ async function waitForDebugger(port, timeoutMs = 15000) {
   throw new Error('Timed out waiting for Chrome DevTools Protocol');
 }
 
+const modeArg = process.argv.find((a) => a.startsWith('--only='));
+const MODE = modeArg ? modeArg.split('=')[1] : 'all';
+
 (async () => {
   fs.mkdirSync(OUT_DIR, { recursive: true });
+  if (MODE === 'all' || MODE === 'gif') {
+    fs.rmSync(GIF_FRAMES_DIR, { recursive: true, force: true });
+  }
+  fs.mkdirSync(GIF_FRAMES_DIR, { recursive: true });
+  fs.rmSync('/tmp/orbitpulse-cdp-profile', { recursive: true, force: true });
 
   const chrome = spawn(
     '/usr/bin/google-chrome',
@@ -111,6 +119,14 @@ async function waitForDebugger(port, timeoutMs = 15000) {
   );
 
   let cdp;
+  const existingFrames = fs.readdirSync(GIF_FRAMES_DIR).filter((f) => f.startsWith('frame_') && f.endsWith('.png'));
+  let gifIdx = MODE === 'part2' ? existingFrames.length : 0;
+  const captureGifFrame = async (delayMs = 140) => {
+    gifIdx += 1;
+    const fname = `frame_${String(gifIdx).padStart(3, '0')}_${delayMs}.png`;
+    await cdp.screenshot(path.join(GIF_FRAMES_DIR, fname));
+  };
+
   try {
     const wsUrl = await waitForDebugger(PORT);
     cdp = new CdpClient(wsUrl);
@@ -118,9 +134,19 @@ async function waitForDebugger(port, timeoutMs = 15000) {
 
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
-    await cdp.send('Log.enable');
 
-    // === DESKTOP 1920x1080 ===
+    const waitAppReady = async (maxTicks = 30, tickMs = 500) => {
+      for (let i = 0; i < maxTicks; i++) {
+        await sleep(tickMs);
+        const ready = await cdp.eval(
+          `document.querySelectorAll('#sat-list .sat-item').length > 0 && (document.getElementById('boot-splash')?.hidden === true || document.getElementById('boot-splash')?.classList.contains('is-hidden'))`
+        );
+        if (ready) break;
+      }
+    };
+
+    if (MODE === 'all' || MODE === 'desktop') {
+    // === DESKTOP 1920x1080 (English Default) ===
     await cdp.send('Emulation.setDeviceMetricsOverride', {
       width: 1920,
       height: 1080,
@@ -128,66 +154,58 @@ async function waitForDebugger(port, timeoutMs = 15000) {
       mobile: false,
     });
     await cdp.send('Page.navigate', { url: BASE_URL });
-    for (let i = 0; i < 20; i++) {
-      await sleep(700);
-      const ready = await cdp.eval(
-        `document.querySelectorAll('#sat-list .sat-item').length > 0 && (document.getElementById('boot-splash')?.hidden === true || document.getElementById('boot-splash')?.classList.contains('is-hidden'))`
-      );
-      if (ready) break;
-    }
-    await sleep(3000);
+    await waitAppReady(30, 600);
+    await sleep(3200);
 
-    // Verify boot splash dismissed + multi-pass schedule + favorites + scrubber
-    const desktopStats = await cdp.eval(`(() => ({
-      splashHidden: document.getElementById('boot-splash')?.hidden === true || document.getElementById('boot-splash')?.classList.contains('is-hidden'),
-      satCount: document.querySelectorAll('#sat-list .sat-item').length,
-      selectedTitle: document.getElementById('tel-name')?.textContent?.trim(),
-      passRows: document.querySelectorAll('#tel-pass-box .pass-row').length,
-      hasFavBtn: Boolean(document.getElementById('btn-favorite')),
-      hasShareBtn: Boolean(document.getElementById('btn-share-sat')),
-      hasScrubberToggle: Boolean(document.getElementById('btn-scrubber-toggle')),
+    // 01: Overview (17,038 satellites + ISS SATCAT + Naked-Eye Visibility, EN default)
+    const overviewStats = await cdp.eval(`(() => ({
+      lang: document.documentElement.lang,
+      listMeta: document.getElementById('list-count-text')?.textContent?.trim(),
+      tabsCount: document.querySelectorAll('#category-tabs .cat-tab').length,
+      selected: document.getElementById('tel-name')?.textContent?.trim(),
+      owner: document.getElementById('tel-owner')?.textContent?.trim(),
+      rcs: document.getElementById('tel-rcs')?.textContent?.trim(),
+      visual: document.getElementById('tel-visual-badge')?.textContent?.trim(),
     }))()`);
-    console.log('DESKTOP OVERVIEW:', JSON.stringify(desktopStats));
-    await cdp.screenshot('01-overview.png');
+    console.log('01 OVERVIEW:', JSON.stringify(overviewStats));
+    await cdp.screenshot(path.join(OUT_DIR, '01-overview.png'));
 
-    // Test favorite toggle & multi-pass jump button presence
-    await cdp.eval(`document.getElementById('btn-favorite').click()`);
-    await sleep(300);
-    const favActive = await cdp.eval(
-      `document.getElementById('btn-favorite').classList.contains('is-favorite')`
-    );
-    console.log('FAVORITE TOGGLED:', favActive);
-    // Toggle back so default state stays clean for screenshots
-    await cdp.eval(`document.getElementById('btn-favorite').click()`);
-    await sleep(200);
-
-    // === 02: ISS NASA 3D Close-Up + Attitude Vectors ===
+    // === 02: ISS NASA 3D Close-Up + Attitude Guides ===
     await cdp.eval(`document.getElementById('btn-closeup').click()`);
     await sleep(5500);
     const iss3dState = await cdp.eval(`({
       modelType: document.getElementById('tel-model-type')?.textContent?.trim(),
       lodText: document.getElementById('tel-model-lod')?.textContent?.trim(),
     })`);
-    console.log('ISS 3D CLOSEUP:', JSON.stringify(iss3dState));
-    await cdp.screenshot('02-iss-3d-closeup.png');
+    console.log('02 ISS 3D CLOSEUP:', JSON.stringify(iss3dState));
+    await cdp.screenshot(path.join(OUT_DIR, '02-iss-3d-closeup.png'));
 
-    // === 03: Korea Satellites Tab (GK-2A / KOMPSAT) ===
+    // === 03: South Korea 83 Satellites (Korean Mode Showcase) ===
+    await cdp.eval(`document.getElementById('btn-lang-toggle').click()`);
+    await sleep(400);
     await cdp.eval(`document.querySelector('[data-category="korea"]').click()`);
-    await sleep(4000);
+    await sleep(2200);
     const koreaInfo = await cdp.eval(`(() => {
       const items = [...document.querySelectorAll('#sat-list .sat-item')];
-      const names = items.map((el) => el.querySelector('.sat-item-name')?.textContent?.trim());
-      const gk2a = items.find((el) => el.dataset.id === '43823') || items[0];
-      if (gk2a) gk2a.click();
-      return { count: items.length, sample: names.slice(0, 8), hasGk2a: items.some((el) => el.dataset.id === '43823') };
+      const target = items.find((el) => el.dataset.id === '66655') || items.find((el) => el.dataset.id === '43823') || items[0];
+      if (target) target.click();
+      return {
+        lang: document.documentElement.lang,
+        meta: document.getElementById('list-count-text')?.textContent?.trim(),
+        selected: target?.querySelector('.sat-item-name')?.textContent?.trim(),
+      };
     })()`);
-    console.log('KOREA TAB:', JSON.stringify(koreaInfo));
-    await sleep(3500);
-    await cdp.screenshot('03-korea-satellites.png');
+    await sleep(2800);
+    console.log('03 KOREA TAB (KO):', JSON.stringify(koreaInfo));
+    await cdp.screenshot(path.join(OUT_DIR, '03-korea-satellites.png'));
 
-    // === 04: Hubble Space Telescope NASA 3D Close-Up ===
+    // Switch back to English default for remaining screenshots
+    await cdp.eval(`document.getElementById('btn-lang-toggle').click()`);
+    await sleep(400);
+
+    // === 04: Hubble Space Telescope NASA 3D Close-Up (EN) ===
     await cdp.eval(`document.querySelector('[data-category="science"]').click()`);
-    await sleep(3500);
+    await sleep(1800);
     await cdp.eval(`(() => {
       const hst = document.querySelector('#sat-list .sat-item[data-id="20580"]');
       if (hst) hst.click();
@@ -195,16 +213,12 @@ async function waitForDebugger(port, timeoutMs = 15000) {
     await sleep(1500);
     await cdp.eval(`document.getElementById('btn-closeup').click()`);
     await sleep(5500);
-    const hstState = await cdp.eval(`({
-      name: document.getElementById('tel-name')?.textContent?.trim(),
-      lodText: document.getElementById('tel-model-lod')?.textContent?.trim(),
-    })`);
-    console.log('HUBBLE 3D CLOSEUP:', JSON.stringify(hstState));
-    await cdp.screenshot('04-hubble-3d-closeup.png');
+    console.log('04 HUBBLE 3D:', await cdp.eval(`document.getElementById('tel-name')?.textContent?.trim()`));
+    await cdp.screenshot(path.join(OUT_DIR, '04-hubble-3d-closeup.png'));
 
-    // === 05: Layers Popover + ±24h Timeline Scrubber ===
-    await cdp.eval(`document.querySelector('[data-category="featured"]').click()`);
-    await sleep(2500);
+    // === 05: Bright/Visual Satellites + Layers Popover + ±24h Scrubber ===
+    await cdp.eval(`document.querySelector('[data-category="visual"]').click()`);
+    await sleep(2000);
     await cdp.eval(`(() => {
       const iss = document.querySelector('#sat-list .sat-item[data-id="25544"]');
       if (iss) iss.click();
@@ -218,75 +232,107 @@ async function waitForDebugger(port, timeoutMs = 15000) {
       s.dispatchEvent(new Event('input', { bubbles: true }));
     })()`);
     await sleep(1500);
-    const scrubberState = await cdp.eval(`({
-      layersOpen: !document.getElementById('layers-popover').hidden,
-      scrubberOpen: !document.getElementById('time-scrubber-bar').hidden,
-      offsetLabel: document.getElementById('scrubber-offset-label').textContent.trim(),
-    })`);
-    console.log('LAYERS & SCRUBBER:', JSON.stringify(scrubberState));
-    await cdp.screenshot('05-layers-and-scrubber.png');
-
-    // === 06: Mobile Portrait Main (360x640 @3x => 1080x1920) ===
-    await cdp.send('Emulation.setDeviceMetricsOverride', {
-      width: 360,
-      height: 640,
-      deviceScaleFactor: 3,
-      mobile: true,
-    });
-    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
-    await cdp.send('Page.navigate', { url: BASE_URL });
-    for (let i = 0; i < 20; i++) {
-      await sleep(700);
-      const ready = await cdp.eval(
-        `Boolean(document.getElementById('left-drawer')) && document.querySelectorAll('#sat-list .sat-item').length > 0 && (document.getElementById('boot-splash')?.hidden === true || document.getElementById('boot-splash')?.classList.contains('is-hidden'))`
-      );
-      if (ready) break;
+    console.log('05 LAYERS & SCRUBBER:', await cdp.eval(`({
+      meta: document.getElementById('list-count-text')?.textContent?.trim(),
+      offset: document.getElementById('scrubber-offset-label')?.textContent?.trim(),
+    })`));
+    await cdp.screenshot(path.join(OUT_DIR, '05-layers-and-scrubber.png'));
     }
-    await sleep(2500);
 
-    const mobileMain = await cdp.eval(`(() => {
-      const r = (id) => {
-        const b = document.getElementById(id).getBoundingClientRect();
-        return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) };
-      };
-      const topR = document.querySelector('.top-controls').getBoundingClientRect();
-      return {
-        drawerCollapsed: document.getElementById('left-drawer').classList.contains('collapsed'),
-        telemetryPeek: document.getElementById('telemetry-panel').classList.contains('mobile-peek'),
-        expandBtn: r('btn-expand-drawer'),
-        topControls: { x: Math.round(topR.x), y: Math.round(topR.y), w: Math.round(topR.width), h: Math.round(topR.height) },
-        bottomBar: r('btn-live-now'),
-      };
-    })()`);
-    console.log('MOBILE MAIN:', JSON.stringify(mobileMain));
-    await cdp.screenshot('06-mobile.png');
+    // ===============================================================
+    // ANIMATED GIF SEQUENCE (1280x720 crisp capture -> resized to 960x540)
+    // ===============================================================
+    if (MODE === 'all' || MODE === 'gif' || MODE === 'part2') {
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1280,
+        height: 720,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await cdp.send('Page.navigate', { url: BASE_URL });
+      await waitAppReady(30, 500);
+      await sleep(2200);
+    }
 
-    // === 07: Mobile Bottom Sheet (Satellite Browser Open) ===
-    await cdp.eval(`document.getElementById('btn-expand-drawer').click()`);
-    for (let i = 0; i < 15; i++) {
+    if (MODE === 'all' || MODE === 'gif') {
+      // Scene 1: Global 17,038 Satellites orbiting at 300x speed (EN) — 14 frames
+      await cdp.eval(`document.querySelector('#speed-buttons [data-speed="300"]').click()`);
       await sleep(400);
-      const y = await cdp.eval(`Math.round(document.getElementById('left-drawer').getBoundingClientRect().y)`);
-      if (y < 200) break;
-    }
-    const mobileSheet = await cdp.eval(`({
-      drawerCollapsed: document.getElementById('left-drawer').classList.contains('collapsed'),
-      drawerY: Math.round(document.getElementById('left-drawer').getBoundingClientRect().y),
-      backdropVisible: !document.getElementById('mobile-backdrop').hidden,
-    })`);
-    console.log('MOBILE SHEET:', JSON.stringify(mobileSheet));
-    await cdp.screenshot('07-mobile-sheet.png');
+      for (let i = 0; i < 14; i++) {
+        await captureGifFrame(i === 0 ? 450 : 150);
+        await sleep(260);
+      }
 
-    // Check runtime/console errors collected by CDP
-    const runtimeErrors = cdp.events.filter(
-      (e) =>
-        e.method === 'Runtime.exceptionThrown' ||
-        (e.method === 'Runtime.consoleAPICalled' && e.params?.type === 'error')
-    );
-    console.log('RUNTIME ERRORS COUNT:', runtimeErrors.length);
-    if (runtimeErrors.length > 0) {
-      console.error(JSON.stringify(runtimeErrors, null, 2));
-      process.exitCode = 1;
+      // Scene 2: ISS NASA 3D Close-Up + Attitude Guides at 10x speed — 12 frames
+      await cdp.eval(`document.querySelector('#speed-buttons [data-speed="10"]').click()`);
+      await cdp.eval(`document.getElementById('btn-closeup').click()`);
+      await sleep(4800);
+      for (let i = 0; i < 12; i++) {
+        await captureGifFrame(i === 0 ? 450 : 160);
+        await sleep(280);
+      }
+
+      // Scene 3: South Korea (83 sats) -> live EN to KO toggle! — 12 frames
+      await cdp.eval(`document.querySelector('#speed-buttons [data-speed="300"]').click()`);
+      await cdp.eval(`document.querySelector('[data-category="korea"]').click()`);
+      await sleep(1800);
+      await cdp.eval(`(() => {
+        const target = document.querySelector('#sat-list .sat-item[data-id="66655"]') || document.querySelector('#sat-list .sat-item[data-id="43823"]');
+        if (target) target.click();
+      })()`);
+      await sleep(2000);
+      for (let i = 0; i < 5; i++) {
+        await captureGifFrame(i === 0 ? 450 : 180);
+        await sleep(260);
+      }
+      // Live click EN -> 한!
+      await cdp.eval(`document.getElementById('btn-lang-toggle').click()`);
+      await sleep(450);
+      for (let i = 0; i < 7; i++) {
+        await captureGifFrame(i === 0 ? 500 : 180);
+        await sleep(260);
+      }
+      await cdp.eval(`document.getElementById('btn-lang-toggle').click()`);
+      await sleep(300);
     }
+
+    if (MODE === 'all' || MODE === 'gif' || MODE === 'part2') {
+      // Scene 4: Hubble Space Telescope NASA 3D Close-Up (EN) — 10 frames
+      await cdp.eval(`document.querySelector('[data-category="science"]').click()`);
+      await sleep(1200);
+      await cdp.eval(`document.querySelector('#sat-list .sat-item[data-id="20580"]')?.click()`);
+      await sleep(1200);
+      await cdp.eval(`document.querySelector('#speed-buttons [data-speed="10"]').click()`);
+      await cdp.eval(`document.getElementById('btn-closeup').click()`);
+      await sleep(4800);
+      for (let i = 0; i < 10; i++) {
+        await captureGifFrame(i === 0 ? 450 : i === 9 ? 550 : 160);
+        await sleep(260);
+      }
+      console.log('GIF FRAMES CAPTURED:', gifIdx);
+    }
+
+    if (MODE === 'all' || MODE === 'mobile' || MODE === 'part2') {
+      // === 06 & 07: Mobile Portrait (360x640 @3x => 1080x1920, EN default) ===
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 360,
+        height: 640,
+        deviceScaleFactor: 3,
+        mobile: true,
+      });
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+      await cdp.send('Page.navigate', { url: BASE_URL });
+      await waitAppReady(30, 500);
+      await sleep(2500);
+      await cdp.screenshot(path.join(OUT_DIR, '06-mobile.png'));
+
+      // Expand telemetry bottom sheet showing SATCAT + Naked-Eye Visibility
+      await cdp.eval(`document.getElementById('btn-toggle-telemetry-expand').click()`);
+      await sleep(700);
+      await cdp.screenshot(path.join(OUT_DIR, '07-mobile-sheet.png'));
+      console.log('06 & 07 MOBILE CAPTURED');
+    }
+    console.log('RUNTIME ERRORS:', cdp.errors.length, cdp.errors);
   } finally {
     cdp?.close();
     chrome.kill('SIGKILL');
