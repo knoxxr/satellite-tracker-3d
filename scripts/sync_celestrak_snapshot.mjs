@@ -5,11 +5,17 @@
  * compacts OMM fields, and writes public/data/active.json + public/data/meta.json
  * so unlimited concurrent visitors load from GitHub Pages CDN with ZERO CelesTrak API calls.
  */
+import dns from 'node:dns';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { classifySatelliteGroup, compactOmmRecord } from '../src/orbital/catalog.js';
 
+dns.setDefaultResultOrder('ipv4first');
+
+const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT_DIR, 'public', 'data');
@@ -18,18 +24,49 @@ const ACTIVE_PATH = path.join(DATA_DIR, 'active.json');
 const META_PATH = path.join(DATA_DIR, 'meta.json');
 
 const CELESTRAK_BASE = 'https://celestrak.org/NORAD/elements/gp.php';
+const USER_AGENT = 'OrbitPulse-3D-CDN-Snapshot-Sync/2.0 (+https://github.com/knoxxr/satellite-tracker-3d)';
 const MIN_AGE_MS = 2 * 60 * 60 * 1000; // Respect CelesTrak 2-hour update cadence
 const FORCE = process.argv.includes('--force');
 
-async function fetchJsonArray(url, timeoutMs = 25000) {
+async function fetchJsonViaCurl(url, timeoutSec = 60) {
+  const { stdout } = await execFileAsync(
+    'curl',
+    [
+      '-4',
+      '--compressed',
+      '--http2',
+      '--location',
+      '--silent',
+      '--show-error',
+      '--fail-with-body',
+      '--connect-timeout',
+      '15',
+      '--max-time',
+      String(timeoutSec),
+      '-H',
+      `User-Agent: ${USER_AGENT}`,
+      '-H',
+      'Accept: application/json',
+      url,
+    ],
+    { maxBuffer: 32 * 1024 * 1024 }
+  );
+  const text = stdout.trim();
+  if (!text.startsWith('[')) return [];
+  const parsed = JSON.parse(text);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+async function fetchJsonViaNode(url, timeoutMs = 45000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'OrbitPulse-3D-CDN-Snapshot-Sync/2.0 (+https://github.com/knoxxr/satellite-tracker-3d)',
+        'User-Agent': USER_AGENT,
         Accept: 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
       },
     });
     if (!res.ok) {
@@ -41,6 +78,20 @@ async function fetchJsonArray(url, timeoutMs = 25000) {
     return Array.isArray(parsed) ? parsed : [];
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function fetchJsonArray(url, timeoutSec = 60) {
+  try {
+    return await fetchJsonViaCurl(url, timeoutSec);
+  } catch (curlErr) {
+    // If CelesTrak explicitly returned 403/429 via curl, don't retry with fetch
+    const msg = String(curlErr?.stderr || curlErr?.message || '');
+    if (msg.includes('403') || msg.includes('429')) {
+      throw new Error(msg.trim());
+    }
+    console.warn(`[sync] curl fallback to Node fetch (${msg.slice(0, 120)})`);
+    return await fetchJsonViaNode(url, timeoutSec * 1000);
   }
 }
 
@@ -89,18 +140,15 @@ async function main() {
     return;
   }
 
-  console.log('[sync] Fetching CelesTrak GROUP=active and GROUP=last-30-days...');
-  const [activeRes, recentRes, koreaFallback] = await Promise.all([
-    fetchJsonArray(`${CELESTRAK_BASE}?GROUP=active&FORMAT=json`, 28000).catch((err) => {
-      console.warn(`[sync] GROUP=active fetch failed: ${err.message}`);
-      return null;
-    }),
-    fetchJsonArray(`${CELESTRAK_BASE}?GROUP=last-30-days&FORMAT=json`, 15000).catch((err) => {
-      console.warn(`[sync] GROUP=last-30-days fetch failed: ${err.message}`);
-      return [];
-    }),
-    readBundledKoreaFallback(),
-  ]);
+  const t0 = Date.now();
+  console.log('[sync] Fetching CelesTrak GROUP=active (IPv4 + HTTP/2 + gzip)...');
+  let activeRes = null;
+  try {
+    activeRes = await fetchJsonArray(`${CELESTRAK_BASE}?GROUP=active&FORMAT=json`, 60);
+    console.log(`[sync] GROUP=active downloaded: ${activeRes.length} satellites in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  } catch (err) {
+    console.warn(`[sync] GROUP=active fetch failed: ${err.message}`);
+  }
 
   if (!Array.isArray(activeRes) || activeRes.length < 1000) {
     if (existing) {
@@ -112,6 +160,16 @@ async function main() {
     console.warn('[sync] Upstream unavailable and no prior snapshot cached; build will proceed with bundled fallbacks.');
     return;
   }
+
+  let recentRes = [];
+  try {
+    recentRes = await fetchJsonArray(`${CELESTRAK_BASE}?GROUP=last-30-days&FORMAT=json`, 30);
+    console.log(`[sync] GROUP=last-30-days downloaded: ${recentRes.length} satellites`);
+  } catch (err) {
+    console.warn(`[sync] GROUP=last-30-days fetch skipped: ${err.message}`);
+  }
+
+  const koreaFallback = await readBundledKoreaFallback();
 
   const seen = new Set();
   const compacted = [];

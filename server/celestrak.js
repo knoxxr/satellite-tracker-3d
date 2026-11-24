@@ -1,3 +1,4 @@
+import dns from 'node:dns';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,8 @@ import {
   filterSatellitesByCategory,
   isKoreanSatellite,
 } from '../src/orbital/catalog.js';
+
+dns.setDefaultResultOrder('ipv4first');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FALLBACK_DIR = path.join(__dirname, 'fallback');
