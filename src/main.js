@@ -14,7 +14,7 @@ import {
   predictUpcomingPasses,
   propagateSatellite,
 } from './orbital/propagator.js';
-import { fetchSatelliteByNoradId, fetchSatelliteGroup } from './orbital/dataService.js';
+import { fetchSatelliteByNoradId, fetchSatelliteGroup, searchSatellitesByName } from './orbital/dataService.js';
 import { HudController } from './ui/hud.js';
 
 const STORAGE_KEY_GMAPS = 'orbitpulse_google_maps_api_key';
@@ -45,8 +45,8 @@ function saveFavorites(favSet) {
 class OrbitPulseApp {
   constructor() {
     this.state = {
-      category: 'featured',
-      dataGroup: 'featured',
+      category: 'all',
+      dataGroup: 'all',
       searchQuery: '',
       records: [],
       customRecords: [],
@@ -69,6 +69,13 @@ class OrbitPulseApp {
       showFootprint: true,
       showAttitudeVectors: true,
     };
+
+    this.allRecordsCache = [];
+    this.recordById = new Map();
+    this.filteredRecordsCache = [];
+    this.listRevision = 0;
+    this.propagateCursor = 0;
+    this.forceFullPositionSync = true;
 
     this.positionsMap = new Map();
     this.cachedOrbitTrack = null;
@@ -104,9 +111,11 @@ class OrbitPulseApp {
       onCategoryChange: (cat) => this.handleCategoryChange(cat),
       onSearchChange: (q) => {
         this.state.searchQuery = q;
+        this.rebuildFilteredCache();
         this.renderFilteredList();
       },
-      onRefreshData: () => this.loadCategory(this.state.dataGroup || 'featured', true),
+      onSearchLiveCelesTrak: (q) => this.searchLiveCelesTrak(q),
+      onRefreshData: () => this.loadCategory(this.state.dataGroup || 'all', true),
       onSelectSatellite: (id, flyTo) => this.selectSatellite(id, flyTo),
       onDeselectSatellite: () => this.selectSatellite(null, false),
       onToggleFavorite: () => this.toggleFavoriteSelected(),
@@ -152,15 +161,15 @@ class OrbitPulseApp {
     this.cesiumEngine.setObserver(this.state.observer);
     this.hud.setApiKeyState(Boolean(this.state.googleApiKey));
 
-    this.hud.setSplashStatus('CelesTrak 실시간 궤도 요소 동기화 중...');
-    const splashTimer = setTimeout(() => this.hud.hideBootSplash(), 1800);
-    await this.loadCategory('featured', false);
+    this.hud.setSplashStatus('전 세계 무료 공개 인공위성 전체 동기화 중...');
+    const splashTimer = setTimeout(() => this.hud.hideBootSplash(), 3200);
+    await this.loadCategory('all', false);
     clearTimeout(splashTimer);
 
     // Check URL deep link (?sat=25544&closeup=1) before defaulting to ISS
     const deepLinked = await this.applyDeepLinkFromUrl();
     if (!deepLinked) {
-      const iss = this.getAllRecords().find((r) => r.id === 25544) || this.getAllRecords()[0];
+      const iss = this.recordById.get(25544) || this.allRecordsCache[0];
       if (iss) {
         this.selectSatellite(iss.id, false);
       }
@@ -196,11 +205,11 @@ class OrbitPulseApp {
     if (!Number.isFinite(satId) || satId <= 0) return false;
 
     const wantCloseup = params.get('closeup') === '1' || params.get('closeup') === 'true';
-    let target = this.getAllRecords().find((r) => r.id === satId);
+    let target = this.recordById.get(satId);
 
     if (!target) {
       await this.lookupNoradSatellite(String(satId), false);
-      target = this.getAllRecords().find((r) => r.id === satId);
+      target = this.recordById.get(satId);
     }
 
     if (!target) return false;
@@ -214,39 +223,66 @@ class OrbitPulseApp {
   async handleCategoryChange(categoryId) {
     this.state.category = categoryId;
     if (categoryId === 'favorites') {
-      if (this.state.dataGroup !== 'featured') {
-        await this.loadCategory('featured', false, false);
+      if (this.state.dataGroup !== 'all' && this.state.dataGroup !== 'featured') {
+        await this.loadCategory('all', false, false);
       }
+      this.rebuildFilteredCache();
       this.renderFilteredList();
       return;
     }
     await this.loadCategory(categoryId, false, true);
   }
 
-  getAllRecords() {
+  rebuildRecordCache() {
     const map = new Map();
     for (const r of this.state.records) map.set(r.id, r);
     for (const r of this.state.customRecords) map.set(r.id, r);
-    return [...map.values()];
+    const list = [...map.values()];
+    const favs = this.state.favorites;
+    // Prioritize favorites and notable satellites at top of 16,000+ list
+    list.sort((a, b) => {
+      const af = favs.has(a.id) ? 2 : 0;
+      const bf = favs.has(b.id) ? 2 : 0;
+      if (af !== bf) return bf - af;
+      const an = getSatelliteDisplayInfo(a.id, a.name).isNotable ? 1 : 0;
+      const bn = getSatelliteDisplayInfo(b.id, b.name).isNotable ? 1 : 0;
+      if (an !== bn) return bn - an;
+      return a.id - b.id;
+    });
+    this.allRecordsCache = list;
+    this.recordById = map;
+    this.propagateCursor = 0;
+    this.rebuildFilteredCache();
   }
 
-  getFilteredRecords() {
-    let all = this.getAllRecords();
+  rebuildFilteredCache() {
+    let all = this.allRecordsCache;
     if (this.state.category === 'favorites') {
       all = all.filter((rec) => this.state.favorites.has(rec.id));
     }
     const q = this.state.searchQuery.trim().toLowerCase();
-    if (!q) return all;
+    if (!q) {
+      this.filteredRecordsCache = all;
+    } else {
+      this.filteredRecordsCache = all.filter((rec) => {
+        const info = getSatelliteDisplayInfo(rec.id, rec.name);
+        return (
+          rec.name.toLowerCase().includes(q) ||
+          info.title.toLowerCase().includes(q) ||
+          String(rec.id).includes(q) ||
+          rec.regime.toLowerCase().includes(q)
+        );
+      });
+    }
+    this.listRevision += 1;
+  }
 
-    return all.filter((rec) => {
-      const info = getSatelliteDisplayInfo(rec.id, rec.name);
-      return (
-        rec.name.toLowerCase().includes(q) ||
-        info.title.toLowerCase().includes(q) ||
-        String(rec.id).includes(q) ||
-        rec.regime.toLowerCase().includes(q)
-      );
-    });
+  getAllRecords() {
+    return this.allRecordsCache;
+  }
+
+  getFilteredRecords() {
+    return this.filteredRecordsCache;
   }
 
   async loadCategory(categoryId, forceRefresh = false, updateCategoryState = true) {
@@ -266,8 +302,10 @@ class OrbitPulseApp {
       }
 
       this.state.records = parsed;
+      this.rebuildRecordCache();
       this.syncSatellitesToEngines();
       this.propagateAll(new Date(this.state.simTimeMs));
+      this.forceFullPositionSync = true;
       this.renderFilteredList();
 
       const srcLabel = payload.source === 'celestrak-live' ? 'CelesTrak 실시간' : '로컬 스냅샷';
@@ -277,10 +315,10 @@ class OrbitPulseApp {
         minute: '2-digit',
         hour12: false,
       }).format(new Date(payload.updatedAt || Date.now()));
-      this.hud.setSyncStatus(`${srcLabel} · ${this.getAllRecords().length}기 (${timeStr})`);
+      this.hud.setSyncStatus(`${srcLabel} · ${this.allRecordsCache.length.toLocaleString()}기 (${timeStr})`);
 
       if (forceRefresh) {
-        this.hud.toast(`최신 궤도 요소 ${parsed.length}기를 동기화했습니다.`, 'success');
+        this.hud.toast(`최신 궤도 요소 ${parsed.length.toLocaleString()}기를 동기화했습니다.`, 'success');
       }
     } catch (err) {
       this.hud.setSyncStatus('데이터 로드 오류');
@@ -289,10 +327,10 @@ class OrbitPulseApp {
   }
 
   syncSatellitesToEngines() {
-    const all = this.getAllRecords();
+    const all = this.allRecordsCache;
     this.cesiumEngine.setSatellites(all);
     if (this.gmapsInitialized) {
-      this.gmapsEngine.setSatellites(all);
+      this.gmapsEngine.setSatellites(all.slice(0, 300));
     }
   }
 
@@ -498,13 +536,47 @@ class OrbitPulseApp {
         ...this.state.customRecords.filter((r) => r.id !== rec.id),
         rec,
       ];
+      this.rebuildRecordCache();
       this.syncSatellitesToEngines();
       this.propagateAll(new Date(this.state.simTimeMs));
+      this.forceFullPositionSync = true;
       this.selectSatellite(rec.id, true);
       if (closeModal) this.hud.closeAddModal();
       this.hud.toast(`${rec.name} (#${rec.id}) 위성이 추가되었습니다.`, 'success');
     } catch (err) {
       this.hud.toast(err.message, 'error');
+    }
+  }
+
+  async searchLiveCelesTrak(query) {
+    const clean = String(query || '').trim();
+    if (clean.length < 2) return;
+    try {
+      this.hud.toast(`CelesTrak 전체 DB에서 "${clean}" 검색 중...`, 'info');
+      const omms = await searchSatellitesByName(clean);
+      const parsed = [];
+      for (const omm of omms) {
+        const rec = buildRecordFromOmm(omm);
+        if (rec) parsed.push(rec);
+      }
+      if (parsed.length === 0) {
+        this.hud.toast(`"${clean}"과 일치하는 공개 위성을 찾지 못했습니다.`, 'info');
+        return;
+      }
+      const existingIds = new Set(parsed.map((r) => r.id));
+      this.state.customRecords = [
+        ...this.state.customRecords.filter((r) => !existingIds.has(r.id)),
+        ...parsed,
+      ];
+      this.rebuildRecordCache();
+      this.syncSatellitesToEngines();
+      this.propagateAll(new Date(this.state.simTimeMs));
+      this.forceFullPositionSync = true;
+      this.renderFilteredList();
+      this.selectSatellite(parsed[0].id, true);
+      this.hud.toast(`"${clean}" 검색 결과 ${parsed.length}기를 불러왔습니다.`, 'success');
+    } catch (err) {
+      this.hud.toast(`위성 검색 실패: ${err.message}`, 'error');
     }
   }
 
@@ -515,8 +587,10 @@ class OrbitPulseApp {
         ...this.state.customRecords.filter((r) => r.id !== rec.id),
         rec,
       ];
+      this.rebuildRecordCache();
       this.syncSatellitesToEngines();
       this.propagateAll(new Date(this.state.simTimeMs));
+      this.forceFullPositionSync = true;
       this.selectSatellite(rec.id, true);
       this.hud.closeAddModal();
       this.hud.toast(`TLE 위성 "${rec.name}"이(가) 추가되었습니다.`, 'success');
@@ -528,7 +602,7 @@ class OrbitPulseApp {
   toggleFavoriteSelected() {
     if (!this.state.selectedId) return;
     const id = this.state.selectedId;
-    const rec = this.getAllRecords().find((r) => r.id === id);
+    const rec = this.recordById.get(id);
     const label = rec ? getSatelliteDisplayInfo(rec.id, rec.name).title : `#${id}`;
     if (this.state.favorites.has(id)) {
       this.state.favorites.delete(id);
@@ -538,6 +612,7 @@ class OrbitPulseApp {
       this.hud.toast(`"${label}"을(를) 즐겨찾기에 추가했습니다.`, 'success');
     }
     saveFavorites(this.state.favorites);
+    this.rebuildRecordCache();
     this.hud.setFavoriteState(this.state.favorites.has(id));
     this.renderFilteredList();
   }
@@ -579,6 +654,7 @@ class OrbitPulseApp {
     this.hud.setPlayState(true);
     this.hud.setLiveIndicator(true);
     this.propagateAll(new Date(this.state.simTimeMs));
+    this.forceFullPositionSync = true;
     this.refreshSelectedOrbitTrack(true);
     this.refreshSelectedPassInfo(true);
     this.updateTelemetryPanel();
@@ -592,6 +668,7 @@ class OrbitPulseApp {
     this.hud.setPlayState(true);
     this.hud.setLiveIndicator(false);
     this.propagateAll(new Date(this.state.simTimeMs));
+    this.forceFullPositionSync = true;
     this.refreshSelectedOrbitTrack(true);
     this.refreshSelectedPassInfo(true);
     this.updateTelemetryPanel();
@@ -615,6 +692,7 @@ class OrbitPulseApp {
     this.state.simTimeMs = Date.now() + offsetMinutes * 60_000;
     this.hud.setLiveIndicator(this.isCloseToRealTime());
     this.propagateAll(new Date(this.state.simTimeMs));
+    this.forceFullPositionSync = true;
     this.refreshSelectedOrbitTrack(true);
     this.updateTelemetryPanel();
   }
@@ -644,7 +722,7 @@ class OrbitPulseApp {
 
   propagateAll(simDate) {
     this.positionsMap.clear();
-    for (const rec of this.getAllRecords()) {
+    for (const rec of this.allRecordsCache) {
       const pos = propagateSatellite(rec, simDate);
       if (pos) {
         this.positionsMap.set(rec.id, pos);
@@ -652,9 +730,53 @@ class OrbitPulseApp {
     }
   }
 
+  /**
+   * 2-Tier SGP4 propagation:
+   *  - Selected satellite: updated every single frame at 60fps for smooth 3D closeup & tracking.
+   *  - Remaining satellites: propagated in time-sliced chunks (1,200/frame) so 16,900+ satellites stay at 60fps.
+   */
+  propagateFrame(simDate) {
+    const all = this.allRecordsCache;
+    if (all.length <= 600 || this.forceFullPositionSync) {
+      this.propagateAll(simDate);
+      this.forceFullPositionSync = false;
+      return null; // Full GPU sync
+    }
+
+    const updatedIds = new Set();
+    const batchSize = 1200;
+    const len = all.length;
+    let idx = this.propagateCursor % len;
+
+    for (let i = 0; i < batchSize; i++) {
+      const rec = all[idx];
+      const pos = propagateSatellite(rec, simDate);
+      if (pos) {
+        this.positionsMap.set(rec.id, pos);
+      } else {
+        this.positionsMap.delete(rec.id);
+      }
+      updatedIds.add(rec.id);
+      idx = (idx + 1) % len;
+    }
+    this.propagateCursor = idx;
+
+    // Always propagate the selected satellite at full 60fps
+    if (this.state.selectedId) {
+      const selRec = this.recordById.get(this.state.selectedId);
+      if (selRec) {
+        const pos = propagateSatellite(selRec, simDate);
+        if (pos) this.positionsMap.set(selRec.id, pos);
+        updatedIds.add(selRec.id);
+      }
+    }
+
+    return updatedIds;
+  }
+
   refreshSelectedOrbitTrack(force = false) {
     if (!this.state.selectedId) return;
-    const rec = this.getAllRecords().find((r) => r.id === this.state.selectedId);
+    const rec = this.recordById.get(this.state.selectedId);
     if (!rec) return;
 
     const ageMs = Math.abs(this.state.simTimeMs - this.cachedOrbitMeta.computedAtSimMs);
@@ -675,7 +797,7 @@ class OrbitPulseApp {
 
   refreshSelectedPassInfo(force = false) {
     if (!this.state.selectedId) return;
-    const rec = this.getAllRecords().find((r) => r.id === this.state.selectedId);
+    const rec = this.recordById.get(this.state.selectedId);
     if (!rec) return;
 
     const obsKey = `${this.state.observer.lat.toFixed(3)},${this.state.observer.lon.toFixed(3)}`;
@@ -700,20 +822,20 @@ class OrbitPulseApp {
   }
 
   renderFilteredList() {
-    const filtered = this.getFilteredRecords();
     this.hud.renderSatelliteList(
-      filtered,
+      this.filteredRecordsCache,
       this.state.selectedId,
       this.positionsMap,
-      this.getAllRecords().length,
+      this.allRecordsCache.length,
       this.state.favorites,
-      this.state.category === 'favorites'
+      this.state.category === 'favorites',
+      this.listRevision
     );
   }
 
   updateTelemetryPanel() {
     if (!this.state.selectedId) return;
-    const rec = this.getAllRecords().find((r) => r.id === this.state.selectedId);
+    const rec = this.recordById.get(this.state.selectedId);
     const pos = this.positionsMap.get(this.state.selectedId);
     if (!rec || !pos) return;
     const look = computeLookAngles(pos, this.state.observer);
@@ -732,7 +854,7 @@ class OrbitPulseApp {
       this.hud.showTooltip(null, null, null);
       return;
     }
-    const rec = this.getAllRecords().find((r) => r.id === this.state.hoveredId);
+    const rec = this.recordById.get(this.state.hoveredId);
     const pos = this.positionsMap.get(this.state.hoveredId);
     this.hud.showTooltip(rec, pos, this.state.hoveredScreenPos);
   }
@@ -750,7 +872,7 @@ class OrbitPulseApp {
     }
 
     const simDate = new Date(this.state.simTimeMs);
-    this.propagateAll(simDate);
+    const updatedIds = this.propagateFrame(simDate);
 
     // Compute selected look angles for LOS beam in 3D view
     let selectedLook = null;
@@ -766,7 +888,7 @@ class OrbitPulseApp {
     if (this.state.activeEngine === 'google-native' && this.gmapsInitialized) {
       this.gmapsEngine.updatePositions(simDate, this.positionsMap);
     } else {
-      this.cesiumEngine.updatePositions(simDate, this.positionsMap, selectedLook);
+      this.cesiumEngine.updatePositions(simDate, this.positionsMap, selectedLook, updatedIds);
     }
 
     // Throttle DOM telemetry & clock updates to ~5 Hz for smooth performance

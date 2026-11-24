@@ -224,13 +224,19 @@ export class CesiumSatelliteEngine {
     this.onModelLoadingChange = onModelLoadingChange;
     this.viewer = null;
     this.billboards = null;
+    this.satPoints = null;
     this.labels = null;
     this.polylines = null;
     this.groundPoints = null;
     this.observerLabels = null;
 
     this.spriteCache = new Map();
-    this.satPrimitives = new Map(); // id -> { billboard, label, record, color, defaultShowLabel }
+    this.colorCache = new Map();
+    this.massRenderMode = false;
+    this.selectedBillboard = null;
+    this.selectedLabel = null;
+    this.hoveredLabel = null;
+    this.satPrimitives = new Map(); // id -> { point?, billboard?, label?, record, color, defaultShowLabel }
     this.modelCache = new Map(); // archetypeKey -> { model, meta }
     this.modelLoadPromises = new Map(); // archetypeKey -> Promise
     this.activeModelKey = null;
@@ -335,9 +341,10 @@ export class CesiumSatelliteEngine {
 
     this.setBasemap(this.currentBasemap);
 
-    // Pure GPU Primitive collections (zero Entity WebWorker async crashes)
+    // Pure GPU Primitive collections (zero Entity WebWorker async crashes; scales to 20,000+ satellites at 60fps)
     this.polylines = scene.primitives.add(new Cesium.PolylineCollection());
     this.groundPoints = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+    this.satPoints = scene.primitives.add(new Cesium.PointPrimitiveCollection());
     this.billboards = scene.primitives.add(new Cesium.BillboardCollection());
     this.labels = scene.primitives.add(new Cesium.LabelCollection());
     this.observerLabels = scene.primitives.add(new Cesium.LabelCollection());
@@ -626,14 +633,112 @@ export class CesiumSatelliteEngine {
     this.observerLabel.show = true;
   }
 
+  getCachedColor(hexColor, alpha = 0.9) {
+    const key = `${hexColor}:${alpha}`;
+    if (!this.colorCache.has(key)) {
+      this.colorCache.set(key, Cesium.Color.fromCssColorString(hexColor || '#38bdf8').withAlpha(alpha));
+    }
+    return this.colorCache.get(key);
+  }
+
   setSatellites(records) {
-    if (!this.billboards || !this.labels) return;
+    if (!this.billboards || !this.labels || !this.satPoints) return;
+    this.satPoints.removeAll();
     this.billboards.removeAll();
     this.labels.removeAll();
     this.satPrimitives.clear();
+    this.selectedBillboard = null;
+    this.selectedLabel = null;
+    this.hoveredLabel = null;
 
+    this.massRenderMode = records.length > 500;
     const showLabelsByDefault = records.length <= 45;
+    const outlineDark = Cesium.Color.fromCssColorString('#05080f');
 
+    if (this.massRenderMode) {
+      // Dedicated glowing highlight markers for selected & hovered spacecraft
+      this.selectedBillboard = this.billboards.add({
+        show: false,
+        position: DEFAULT_ORBIT_POS,
+        image: this.getSprite('#38bdf8', true),
+        scale: 0.82,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      });
+      this.selectedLabel = this.labels.add({
+        show: false,
+        position: DEFAULT_ORBIT_POS,
+        text: '',
+        font: '700 12px Inter, "Noto Sans KR", sans-serif',
+        fillColor: Cesium.Color.WHITE,
+        outlineColor: outlineDark,
+        outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(14, 0),
+        horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      });
+      this.hoveredLabel = this.labels.add({
+        show: false,
+        position: DEFAULT_ORBIT_POS,
+        text: '',
+        font: '600 11px Inter, "Noto Sans KR", sans-serif',
+        fillColor: Cesium.Color.fromCssColorString('#e0f2fe'),
+        outlineColor: outlineDark,
+        outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(10, 0),
+        horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      });
+
+      for (const rec of records) {
+        const color = getCategoryColor(rec.group);
+        const info = getSatelliteDisplayInfo(rec.id, rec.name);
+        const point = this.satPoints.add({
+          show: false,
+          position: DEFAULT_ORBIT_POS,
+          pixelSize: info.isNotable ? 6.2 : rec.group === 'starlink' ? 2.8 : 3.5,
+          color: this.getCachedColor(color, info.isNotable ? 1.0 : rec.group === 'starlink' ? 0.72 : 0.88),
+          outlineColor: info.isNotable ? Cesium.Color.WHITE : Cesium.Color.TRANSPARENT,
+          outlineWidth: info.isNotable ? 1.4 : 0,
+          id: { satId: rec.id },
+        });
+
+        let label = null;
+        if (info.isNotable) {
+          label = this.labels.add({
+            show: false,
+            position: DEFAULT_ORBIT_POS,
+            text: info.title.split(' (')[0],
+            font: '600 10.5px Inter, "Noto Sans KR", sans-serif',
+            fillColor: Cesium.Color.fromCssColorString('#f1f5f9').withAlpha(0.92),
+            outlineColor: outlineDark,
+            outlineWidth: 3,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(9, 0),
+            horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            id: { satId: rec.id },
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 28000000),
+          });
+        }
+
+        this.satPrimitives.set(rec.id, {
+          point,
+          billboard: null,
+          label,
+          record: rec,
+          color,
+          titleShort: info.isNotable ? info.title.split(' (')[0] : rec.name,
+          defaultShowLabel: info.isNotable,
+        });
+      }
+      return;
+    }
+
+    // Small-batch mode (<= 500 satellites): lush radial-glow billboards + labels
     for (const rec of records) {
       const color = getCategoryColor(rec.group);
       const isSelected = rec.id === this.selectedId;
@@ -659,7 +764,7 @@ export class CesiumSatelliteEngine {
         fillColor: isSelected
           ? Cesium.Color.WHITE
           : Cesium.Color.fromCssColorString('#e2e8f0').withAlpha(0.9),
-        outlineColor: Cesium.Color.fromCssColorString('#05080f'),
+        outlineColor: outlineDark,
         outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         pixelOffset: new Cesium.Cartesian2(12, 0),
@@ -672,10 +777,12 @@ export class CesiumSatelliteEngine {
       });
 
       this.satPrimitives.set(rec.id, {
+        point: null,
         billboard,
         label,
         record: rec,
         color,
+        titleShort: info.isNotable ? info.title.split(' (')[0] : rec.name,
         defaultShowLabel: showLabel,
       });
     }
@@ -683,7 +790,7 @@ export class CesiumSatelliteEngine {
 
   setSelected(satId) {
     const prev = this.selectedId ? this.satPrimitives.get(this.selectedId) : null;
-    if (prev) {
+    if (prev && !this.massRenderMode && prev.billboard && prev.label) {
       prev.billboard.image = this.getSprite(prev.color, false);
       prev.billboard.scale = 0.62;
       prev.label.show = prev.billboard.show && prev.defaultShowLabel;
@@ -701,17 +808,30 @@ export class CesiumSatelliteEngine {
     if (!satId) {
       this.activeModelKey = null;
       this.activeModelMeta = null;
+      if (this.selectedBillboard) this.selectedBillboard.show = false;
+      if (this.selectedLabel) this.selectedLabel.show = false;
       this.clearSelectionOverlays();
       return;
     }
 
     const next = this.satPrimitives.get(satId);
     if (next) {
-      next.billboard.image = this.getSprite(next.color, true);
-      next.billboard.scale = 0.78;
-      next.label.show = next.billboard.show;
-      next.label.font = '700 12px Inter, "Noto Sans KR", sans-serif';
-      next.label.distanceDisplayCondition = undefined;
+      if (this.massRenderMode) {
+        if (this.selectedBillboard) {
+          this.selectedBillboard.image = this.getSprite(next.color, true);
+          this.selectedBillboard.id = { satId: next.record.id };
+        }
+        if (this.selectedLabel) {
+          this.selectedLabel.text = next.titleShort;
+          this.selectedLabel.id = { satId: next.record.id };
+        }
+      } else if (next.billboard && next.label) {
+        next.billboard.image = this.getSprite(next.color, true);
+        next.billboard.scale = 0.78;
+        next.label.show = next.billboard.show;
+        next.label.font = '700 12px Inter, "Noto Sans KR", sans-serif';
+        next.label.distanceDisplayCondition = undefined;
+      }
       this.ensureSelectedModel(next.record);
     }
   }
@@ -809,14 +929,28 @@ export class CesiumSatelliteEngine {
   }
 
   setHovered(satId) {
+    if (this.massRenderMode) {
+      this.hoveredId = satId;
+      if (!this.hoveredLabel) return;
+      const next = satId ? this.satPrimitives.get(satId) : null;
+      if (next && satId !== this.selectedId && next.point && next.point.show) {
+        this.hoveredLabel.position = next.point.position;
+        this.hoveredLabel.text = next.titleShort;
+        this.hoveredLabel.show = true;
+      } else {
+        this.hoveredLabel.show = false;
+      }
+      return;
+    }
+
     const prev = this.hoveredId ? this.satPrimitives.get(this.hoveredId) : null;
-    if (prev && this.hoveredId !== this.selectedId) {
+    if (prev && this.hoveredId !== this.selectedId && prev.billboard && prev.label) {
       prev.billboard.scale = 0.62;
       prev.label.show = prev.billboard.show && prev.defaultShowLabel;
     }
     this.hoveredId = satId;
     const next = satId ? this.satPrimitives.get(satId) : null;
-    if (next && satId !== this.selectedId) {
+    if (next && satId !== this.selectedId && next.billboard && next.label) {
       next.billboard.scale = 0.8;
       next.label.show = next.billboard.show;
     }
@@ -900,21 +1034,58 @@ export class CesiumSatelliteEngine {
   }
 
   /**
-   * Update all satellite positions in 3D space (called at 60fps).
+   * Update satellite positions in 3D space (called at 60fps; supports time-sliced updatedIds for 20k+ sats).
    */
-  updatePositions(simDate, positionsMap, selectedLook) {
+  updatePositions(simDate, positionsMap, selectedLook, updatedIds = null) {
     if (!this.viewer) return;
 
     this.viewer.clock.currentTime = Cesium.JulianDate.fromDate(simDate);
     const cameraPosWC = this.viewer.camera.positionWC;
 
-    for (const [id, entry] of this.satPrimitives.entries()) {
+    const updateOne = (id, entry) => {
       const pos = positionsMap.get(id);
       const cartesian = pos ? safeCartesianFromDegrees(pos.lon, pos.lat, pos.altMeters) : null;
+
+      if (this.massRenderMode) {
+        if (!cartesian) {
+          if (entry.point) entry.point.show = false;
+          if (entry.label) entry.label.show = false;
+          return;
+        }
+        if (entry.point) {
+          entry.point.position = cartesian;
+          entry.point.show = id !== this.selectedId;
+        }
+        if (entry.label) {
+          entry.label.position = cartesian;
+          entry.label.show = id !== this.selectedId && entry.defaultShowLabel;
+        }
+        if (id === this.selectedId) {
+          this.lastSelectedPosition = { pos, cartesian, record: entry.record };
+          this.updateSelectedOverlays(pos, cartesian, entry.color, selectedLook);
+          const showing3d = this.updateSelected3dModel(pos, cartesian, cameraPosWC);
+          if (this.selectedBillboard) {
+            this.selectedBillboard.position = cartesian;
+            this.selectedBillboard.show = !showing3d;
+          }
+          if (this.selectedLabel) {
+            this.selectedLabel.position = cartesian;
+            this.selectedLabel.show = !this.closeupOrbitLocked;
+          }
+        }
+        if (id === this.hoveredId && id !== this.selectedId && this.hoveredLabel) {
+          this.hoveredLabel.position = cartesian;
+          this.hoveredLabel.text = entry.titleShort;
+          this.hoveredLabel.show = true;
+        }
+        return;
+      }
+
+      // Small-batch billboard mode
       if (!cartesian) {
         entry.billboard.show = false;
         entry.label.show = false;
-        continue;
+        return;
       }
 
       entry.billboard.position = cartesian;
@@ -929,6 +1100,21 @@ export class CesiumSatelliteEngine {
       } else {
         entry.billboard.show = true;
         entry.label.show = id === this.hoveredId || entry.defaultShowLabel;
+      }
+    };
+
+    if (updatedIds) {
+      for (const id of updatedIds) {
+        const entry = this.satPrimitives.get(id);
+        if (entry) updateOne(id, entry);
+      }
+      if (this.selectedId && !updatedIds.has(this.selectedId)) {
+        const selEntry = this.satPrimitives.get(this.selectedId);
+        if (selEntry) updateOne(this.selectedId, selEntry);
+      }
+    } else {
+      for (const [id, entry] of this.satPrimitives.entries()) {
+        updateOne(id, entry);
       }
     }
 

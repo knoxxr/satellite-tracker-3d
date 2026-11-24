@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orbitpulse-3d-v2';
+const CACHE_NAME = 'orbitpulse-3d-v3';
 
 const CORE_ASSETS = [
   './',
@@ -10,8 +10,11 @@ const CORE_ASSETS = [
   './fallback/stations.json',
   './fallback/korea.json',
   './fallback/weather.json',
-  './fallback/gps.json',
+  './fallback/gnss.json',
   './fallback/science.json',
+  './fallback/geo.json',
+  './fallback/comms.json',
+  './fallback/cubesat.json',
 ];
 
 self.addEventListener('install', (event) => {

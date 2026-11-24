@@ -1,13 +1,13 @@
 # OrbitPulse 3D — 실시간 인공위성 3D 구글 지도 추적기
 
-**CelesTrak** 실시간 궤도 요소(OMM JSON / TLE)와 **SGP4/SDP4 궤도 역학(`satellite.js`)** 을 이용해 전 세계 실제 인공위성(ISS, 톈궁, 아리랑 3/3A/5/7, 천리안 2A/2B, 차세대중형위성, 무궁화, GPS, 기상위성, 허블, 스타링크 등)의 위치를 **3D 구글 지도** 위에 60fps로 실시간 추적·시각화하는 웹 애플리케이션입니다.
+**CelesTrak** 무료 공개 전체 카탈로그(`GROUP=active` 16,900+기 및 전 세계 GNSS·GEO·OneWeb·Iridium·큐브위성·아마추어·한국 위성 전체)와 **SGP4/SDP4 궤도 역학(`satellite.js`)** 을 이용해 지구 궤도 위 모든 공개 인공위성을 **3D 구글 지도** 위에 60fps로 실시간 추적·시각화하는 웹 애플리케이션입니다.
 
 ## 주요 기능
 
-- **실제 인공위성 실시간 추적 (SGP4 + CelesTrak OMM JSON)**
-  - 6자리 신규 NORAD 카탈로그 번호(예: `NEONSAT-02` ~ `06`)를 포함해 CelesTrak OMM JSON을 실시간 동기화합니다.
-  - 서버 사이드 2시간 캐싱 및 로컬 스냅샷 자동 폴백을 지원합니다.
-  - **NORAD Catalog ID 실시간 조회** 및 **사용자 TLE 직접 입력** 기능을 제공합니다.
+- **무료 공개 전체 인공위성 실시간 추적 (16,900+기 · SGP4 + CelesTrak OMM JSON)**
+  - **`전체 위성 (ALL)`** 모드에서 GPU `PointPrimitiveCollection` + 2단계 타임슬라이스 SGP4 엔진으로 **16,900기 이상 전 세계 활성 위성**을 60fps로 동시 렌더링하며, 카테고리별 색상으로 궤도 쉘(스타링크·OneWeb·GNSS·GEO·한국 위성 등)을 구분합니다.
+  - **13개 무료 카테고리**: 전체 활성(ALL), 주요 추천, 즐겨찾기, 한국 위성(아리랑 1~7·천리안 1/2A/2B·우리별 1~3·무궁화·차세대중형/소형·초소형군집·SNUGLITE·경기기후위성 등), 우주정거장, 기상·지구관측(`weather`+`resource`), 전세계 GNSS(`GPS`+`Galileo`+`GLONASS`+`BeiDou`+`SBAS`), 과학·천문, 정지궤도 GEO, 스타링크 전체, OneWeb·Iridium·Globalstar, 큐브·아마추어, 최근 30일 발사.
+  - **IndexedDB / 서버 2시간 캐싱** 및 오프라인 폴백 지원, **NORAD ID·위성 이름 실시간 전체 DB 검색**, **사용자 TLE 직접 입력** 지원.
 - **3가지 3D 구글 지도 렌더링 모드 지원**
   1. **3D 지구본 (즉시 실행 · API 키 불필요)**: CesiumJS 3D 지구본 + Google 하이브리드/위성 타일 + 실시간 태양광(주/야간 경계선)
   2. **Google Photorealistic 3D Tiles**: Google Cloud **Map Tiles API** 키를 입력하면 실사 3D 건물·지형 지구본 위에 위성 궤도를 렌더링

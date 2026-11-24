@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getCacheHealth, getGroupSatellites, getSatelliteByNoradId } from './celestrak.js';
+import { getCacheHealth, getGroupSatellites, getSatelliteByNoradId, searchSatellitesByName } from './celestrak.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, '../dist');
@@ -71,6 +71,17 @@ export async function handleApiRequest(req, res) {
       } else {
         sendJson(res, 200, { satellite: sat, source: 'celestrak-live' });
       }
+    } catch (err) {
+      sendJson(res, 502, { error: err.message });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/search') {
+    const q = parsedUrl.searchParams.get('q') || '';
+    try {
+      const satellites = await searchSatellitesByName(q);
+      sendJson(res, 200, { satellites, count: satellites.length, source: 'celestrak-live' });
     } catch (err) {
       sendJson(res, 502, { error: err.message });
     }

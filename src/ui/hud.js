@@ -352,9 +352,23 @@ export class HudController {
         const val = this.el.satSearch.value.trim();
         if (/^\d{4,6}$/.test(val)) {
           this.cb.onLookupNorad?.(val);
+        } else if (val.length >= 2) {
+          this.cb.onSearchLiveCelesTrak?.(val);
         }
       }
     });
+
+    // Infinite scroll batching for massive satellite lists (16,000+ active sats)
+    this.el.satList.addEventListener(
+      'scroll',
+      () => {
+        const el = this.el.satList;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 280) {
+          this.appendNextSatelliteBatch(100);
+        }
+      },
+      { passive: true }
+    );
 
     // Refresh data
     this.el.btnRefreshData.addEventListener('click', () => {
@@ -721,66 +735,47 @@ export class HudController {
     this.syncScrubberFromSimTime(simDate.getTime());
   }
 
-  renderSatelliteList(records, selectedId, positionsMap, totalCount, favoriteIds = new Set(), isFavoritesTab = false) {
+  renderSatelliteList(
+    records,
+    selectedId,
+    positionsMap,
+    totalCount,
+    favoriteIds = new Set(),
+    isFavoritesTab = false,
+    listRevision = 0
+  ) {
     this.el.listCountText.textContent = isFavoritesTab
-      ? `즐겨찾기 ${records.length}기`
-      : `표시 ${records.length}기 / 전체 ${totalCount}기`;
+      ? `즐겨찾기 ${records.length.toLocaleString()}기`
+      : `표시 ${records.length.toLocaleString()}기 / 전체 ${totalCount.toLocaleString()}기`;
 
     const favSig = [...favoriteIds].sort((a, b) => a - b).join('.');
-    const idSig = `${records.map((r) => r.id).join(',')}|${favSig}|${isFavoritesTab ? '1' : '0'}`;
+    const firstId = records[0]?.id ?? 0;
+    const lastId = records[records.length - 1]?.id ?? 0;
+    const idSig = `${listRevision}|${records.length}|${firstId}|${lastId}|${favSig}|${isFavoritesTab ? '1' : '0'}`;
+
+    this.currentListRecords = records;
+    this.currentListSelectedId = selectedId;
+    this.currentListPositions = positionsMap;
+    this.currentListFavorites = favoriteIds;
+
     if (idSig !== this.lastRenderedIds) {
       this.lastRenderedIds = idSig;
       this.listRowMap.clear();
+      this.renderedBatchCount = 0;
 
       if (records.length === 0) {
         this.el.satList.innerHTML = isFavoritesTab
           ? `<div class="empty-list">즐겨찾기한 위성이 아직 없습니다.<br/>위성 상세 패널의 ★ 버튼으로 관심 위성을 등록해 보세요.</div>`
-          : `<div class="empty-list">일치하는 위성이 없습니다.<br/>숫자 NORAD ID 입력 후 Enter로 실시간 조회할 수 있습니다.</div>`;
+          : `<div class="empty-list">일치하는 위성이 없습니다.<br/>위성 이름 또는 NORAD ID 입력 후 Enter로 CelesTrak 전체 DB를 실시간 조회할 수 있습니다.</div>`;
         return;
       }
 
-      const frag = document.createDocumentFragment();
-      for (const rec of records) {
-        const info = getSatelliteDisplayInfo(rec.id, rec.name);
-        const color = getCategoryColor(rec.group);
-        const isFav = favoriteIds.has(rec.id);
-        const row = document.createElement('button');
-        row.className = `sat-item${rec.id === selectedId ? ' selected' : ''}`;
-        row.dataset.id = String(rec.id);
-        row.setAttribute('role', 'option');
-        row.innerHTML = `
-          <div class="sat-item-left">
-            <span class="sat-color-bar" style="background:${color}"></span>
-            <div class="sat-item-info">
-              <div class="sat-item-name">${isFav ? '<span class="sat-fav-star">★</span> ' : ''}${escapeHtml(info.title)}</div>
-              <div class="sat-item-meta">
-                <span class="mono">#${rec.id}</span>
-                <span>·</span>
-                <span>${getGroupLabel(rec.group)}</span>
-              </div>
-            </div>
-          </div>
-          <div class="sat-item-right">
-            <div class="sat-item-alt mono">-- km</div>
-            <span class="sat-regime-tag mono">${rec.regime}</span>
-          </div>
-        `;
-        row.addEventListener('click', () => {
-          this.cb.onSelectSatellite?.(rec.id, true);
-          if (this.isMobile()) {
-            this.closeDrawer();
-            this.setTelemetryExpanded(false);
-          }
-        });
-        const altEl = row.querySelector('.sat-item-alt');
-        this.listRowMap.set(rec.id, { row, altEl });
-        frag.appendChild(row);
-      }
       this.el.satList.innerHTML = '';
-      this.el.satList.appendChild(frag);
+      this.el.satList.scrollTop = 0;
+      this.appendNextSatelliteBatch();
     }
 
-    // Update live altitudes & selection state in-place without rebuilding DOM
+    // Update live altitudes & selection state in-place for currently rendered rows only (O(rendered))
     for (const [id, entry] of this.listRowMap.entries()) {
       entry.row.classList.toggle('selected', id === selectedId);
       const pos = positionsMap.get(id);
@@ -788,6 +783,60 @@ export class HudController {
         entry.altEl.textContent = `${Math.round(pos.altKm).toLocaleString()} km`;
       }
     }
+  }
+
+  appendNextSatelliteBatch(batchSize = 100) {
+    const records = this.currentListRecords;
+    if (!records || this.renderedBatchCount >= records.length) return;
+
+    const start = this.renderedBatchCount;
+    const end = Math.min(start + batchSize, records.length);
+    const selectedId = this.currentListSelectedId;
+    const positionsMap = this.currentListPositions;
+    const favoriteIds = this.currentListFavorites || new Set();
+
+    const frag = document.createDocumentFragment();
+    for (let i = start; i < end; i++) {
+      const rec = records[i];
+      const info = getSatelliteDisplayInfo(rec.id, rec.name);
+      const color = getCategoryColor(rec.group);
+      const isFav = favoriteIds.has(rec.id);
+      const pos = positionsMap?.get(rec.id);
+      const row = document.createElement('button');
+      row.className = `sat-item${rec.id === selectedId ? ' selected' : ''}`;
+      row.dataset.id = String(rec.id);
+      row.setAttribute('role', 'option');
+      row.innerHTML = `
+        <div class="sat-item-left">
+          <span class="sat-color-bar" style="background:${color}"></span>
+          <div class="sat-item-info">
+            <div class="sat-item-name">${isFav ? '<span class="sat-fav-star">★</span> ' : ''}${escapeHtml(info.title)}</div>
+            <div class="sat-item-meta">
+              <span class="mono">#${rec.id}</span>
+              <span>·</span>
+              <span>${getGroupLabel(rec.group)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="sat-item-right">
+          <div class="sat-item-alt mono">${pos ? `${Math.round(pos.altKm).toLocaleString()} km` : '-- km'}</div>
+          <span class="sat-regime-tag mono">${rec.regime}</span>
+        </div>
+      `;
+      row.addEventListener('click', () => {
+        this.cb.onSelectSatellite?.(rec.id, true);
+        if (this.isMobile()) {
+          this.closeDrawer();
+          this.setTelemetryExpanded(false);
+        }
+      });
+      const altEl = row.querySelector('.sat-item-alt');
+      this.listRowMap.set(rec.id, { row, altEl });
+      frag.appendChild(row);
+    }
+
+    this.el.satList.appendChild(frag);
+    this.renderedBatchCount = end;
   }
 
   updateTelemetry(record, pos, look, observer, passInfo, isFav = false) {

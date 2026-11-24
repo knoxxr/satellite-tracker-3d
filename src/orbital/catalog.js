@@ -1,31 +1,50 @@
 export const CATEGORIES = [
-  { id: 'featured', label: '주요 전체', color: '#38bdf8' },
+  { id: 'all', label: '전체 위성 (ALL)', color: '#38bdf8' },
+  { id: 'featured', label: '주요 추천', color: '#0ea5e9' },
   { id: 'favorites', label: '즐겨찾기', color: '#fbbf24' },
+  { id: 'korea', label: '한국 위성', color: '#22d3ee' },
   { id: 'stations', label: '우주정거장', color: '#f59e0b' },
-  { id: 'korea', label: '한국 위성', color: '#38bdf8' },
-  { id: 'weather', label: '기상·관측', color: '#10b981' },
-  { id: 'gps', label: 'GPS/항법', color: '#60a5fa' },
+  { id: 'weather', label: '기상·지구관측', color: '#10b981' },
+  { id: 'gnss', label: '전세계 GNSS', color: '#60a5fa' },
   { id: 'science', label: '과학·천문', color: '#fb7185' },
-  { id: 'starlink', label: '스타링크', color: '#e2e8f0' },
+  { id: 'geo', label: '정지궤도 GEO', color: '#f97316' },
+  { id: 'starlink', label: '스타링크 전체', color: '#e2e8f0' },
+  { id: 'comms', label: 'OneWeb·Iridium', color: '#34d399' },
+  { id: 'cubesat', label: '큐브·아마추어', color: '#fbbf24' },
+  { id: 'recent', label: '최근 30일 발사', color: '#f43f5e' },
 ];
 
 export const GROUP_COLORS = {
+  all: '#38bdf8',
   stations: '#f59e0b',
-  korea: '#38bdf8',
+  korea: '#22d3ee',
   weather: '#10b981',
+  gnss: '#60a5fa',
   gps: '#60a5fa',
   science: '#fb7185',
+  geo: '#f97316',
   starlink: '#cbd5e1',
-  custom: '#f97316',
+  comms: '#34d399',
+  cubesat: '#fbbf24',
+  recent: '#f43f5e',
+  other: '#94a3b8',
+  custom: '#fb923c',
 };
 
 export const GROUP_LABELS = {
+  all: '활성 위성',
   stations: '우주정거장',
   korea: '한국 위성',
   weather: '기상·지구관측',
+  gnss: 'GNSS 항법',
   gps: 'GNSS 항법',
   science: '과학·천문',
+  geo: '정지궤도 GEO',
   starlink: '스타링크 군집',
+  comms: '통신 군집',
+  cubesat: '큐브·아마추어',
+  recent: '신규 발사',
+  other: '일반 위성',
   custom: '사용자 추가',
 };
 
@@ -54,6 +73,22 @@ export const NOTABLE_SATELLITES = {
   20580: {
     koName: '허블 우주망원경 (HST)',
     summary: '1990년 발사되어 심우주를 관측 중인 NASA/ESA 우주망원경',
+  },
+  22077: {
+    koName: '우리별 1호 (KITSAT-1)',
+    summary: '1992년 발사된 대한민국 최초의 인공위성',
+  },
+  22828: {
+    koName: '우리별 2호 (KITSAT-2)',
+    summary: '1993년 국내 기술진 주도로 제작된 대한민국 두 번째 인공위성',
+  },
+  25756: {
+    koName: '우리별 3호 (KITSAT-3)',
+    summary: '1999년 독자 설계·개발된 대한민국 최초 고유 모델 과학실험위성',
+  },
+  36744: {
+    koName: '천리안 1호 (COMS-1)',
+    summary: '2010년 발사된 대한민국 최초의 정지궤도 통신·해양·기상 복합위성',
   },
   38338: {
     koName: '아리랑 3호 (KOMPSAT-3)',
@@ -103,6 +138,10 @@ export const NOTABLE_SATELLITES = {
     koName: '차세대소형위성 2호 (NEXTSAT-2)',
     summary: '누리호 3차 발사로 궤도에 안착한 국산 소형 SAR 영상레이더 위성',
   },
+  66771: {
+    koName: '경기기후위성 1호 (GYEONGGISAT-1)',
+    summary: '경기도 온실가스·기후변화 정밀 관측용 초소형 위성',
+  },
   43013: {
     koName: 'NOAA-20 (JPSS-1)',
     summary: '극궤도를 돌며 전 지구 기상 예보 데이터를 수집하는 미국 기상위성',
@@ -112,6 +151,97 @@ export const NOTABLE_SATELLITES = {
     summary: '최신 극궤도 기상·환경 관측 위성',
   },
 };
+
+const STATION_IDS = new Set([25544, 48274, 49044, 53239, 54216]);
+const KOREA_IDS = new Set([22077, 22828, 25756, 36744, 38338, 39227, 40536, 42691, 42984, 43784, 43823, 45246, 47932, 52898, 52899, 52900, 56743, 59587, 61910, 66661, 66771, 66820, 100950]);
+
+/**
+ * Automatically classify any active CelesTrak OMM object into a visual category
+ * so the 16,000+ global satellite view renders distinct color-coded orbital shells.
+ */
+export function classifySatelliteGroup(omm) {
+  const id = Number(omm?.NORAD_CAT_ID);
+  const name = String(omm?.OBJECT_NAME || '').toUpperCase();
+  const meanMotion = Number(omm?.MEAN_MOTION || 0);
+  const ecc = Number(omm?.ECCENTRICITY || 0);
+
+  if (STATION_IDS.has(id) || name.includes('ISS (ZARYA)') || name.includes('CSS (TIANHE)')) {
+    return 'stations';
+  }
+  if (
+    KOREA_IDS.has(id) ||
+    name.includes('KOMPSAT') ||
+    name.includes('ARIRANG') ||
+    name.includes('KOREASAT') ||
+    name.includes('CAS500') ||
+    name.includes('NEXTSAT') ||
+    name.includes('NEONSAT') ||
+    name.includes('KITSAT') ||
+    name.includes('SNUGLITE') ||
+    name.includes('GYEONGGI') ||
+    name.includes('GK-2') ||
+    name.startsWith('STSAT')
+  ) {
+    return 'korea';
+  }
+  if (name.includes('STARLINK')) return 'starlink';
+  if (
+    name.includes('ONEWEB') ||
+    name.includes('IRIDIUM') ||
+    name.includes('GLOBALSTAR') ||
+    name.includes('KUIPER') ||
+    name.includes('ORBCOMM')
+  ) {
+    return 'comms';
+  }
+  if (
+    name.includes('GPS ') ||
+    name.includes('NAVSTAR') ||
+    name.includes('GALILEO') ||
+    name.includes('GSAT') ||
+    name.includes('GLONASS') ||
+    name.includes('COSMOS 2') && meanMotion > 1.8 && meanMotion < 2.3 ||
+    name.includes('BEIDOU') ||
+    name.includes('QZS-')
+  ) {
+    return 'gnss';
+  }
+  if (
+    id === 20580 ||
+    name.includes('HST') ||
+    name.includes('CHANDRA') ||
+    name.includes('TESS') ||
+    name.includes('FERMI') ||
+    name.includes('SWIFT') ||
+    name.includes('NUSTAR')
+  ) {
+    return 'science';
+  }
+  if (
+    name.includes('NOAA') ||
+    name.includes('GOES') ||
+    name.includes('HIMAWARI') ||
+    name.includes('METEOSAT') ||
+    name.includes('METOP') ||
+    name.includes('METEOR-M') ||
+    name.includes('FENGYUN') ||
+    name.includes('LANDSAT') ||
+    name.includes('SENTINEL') ||
+    name.includes('TERRA') ||
+    name.includes('AQUA') ||
+    name.includes('AURA') ||
+    name.includes('SUOMI')
+  ) {
+    return 'weather';
+  }
+  if (meanMotion >= 0.95 && meanMotion <= 1.06 && ecc < 0.05) {
+    return 'geo';
+  }
+  if (name.includes('CUBE') || name.includes('OSCAR') || name.includes('FLOCK') || name.includes('LEMUR')) {
+    return 'cubesat';
+  }
+  return 'other';
+}
 
 export function getCategoryColor(group) {
   return GROUP_COLORS[group] || '#38bdf8';

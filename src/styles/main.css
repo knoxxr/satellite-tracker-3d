@@ -215,6 +215,18 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  max-height: 98px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.category-tabs::-webkit-scrollbar {
+  width: 4px;
+}
+
+.category-tabs::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
 }
 
 .cat-tab {
@@ -1506,7 +1518,9 @@ body {
   /* Horizontally Scrollable Category Chips */
   .category-tabs {
     flex-wrap: nowrap;
+    max-height: none;
     overflow-x: auto;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     gap: 6px;
