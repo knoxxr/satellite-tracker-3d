@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orbitpulse-3d-v4';
+const CACHE_NAME = 'orbitpulse-3d-v5';
 
 const CORE_ASSETS = [
   './',

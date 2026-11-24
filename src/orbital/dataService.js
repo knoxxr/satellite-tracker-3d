@@ -336,6 +336,7 @@ async function tryCdnSharedSnapshot(existingCached = null, allowStale = false) {
       count: activeList.length,
       satellites: activeList,
       recentIds: Array.isArray(meta.recentIds) ? meta.recentIds : [],
+      brightIds: Array.isArray(meta.brightIds) ? meta.brightIds : [],
     };
     writeCache('all', entry);
     return entry;
@@ -348,12 +349,19 @@ function sliceMasterForGroup(masterEntry, groupName) {
   if (!masterEntry || !Array.isArray(masterEntry.satellites) || masterEntry.satellites.length < 1000) {
     return null;
   }
-  const recentSet =
+  const recentIdSet =
     Array.isArray(masterEntry.recentIds) && masterEntry.recentIds.length > 0
       ? new Set(masterEntry.recentIds)
       : null;
-  const sliced = filterSatellitesByCategory(masterEntry.satellites, groupName, recentSet);
-  if (sliced.length === 0 && groupName !== 'recent') return null;
+  const brightIdSet =
+    Array.isArray(masterEntry.brightIds) && masterEntry.brightIds.length > 0
+      ? new Set(masterEntry.brightIds)
+      : null;
+  const sliced = filterSatellitesByCategory(masterEntry.satellites, groupName, {
+    recentIdSet,
+    brightIdSet,
+  });
+  if (sliced.length === 0 && !['recent', 'naro', 'heo', 'other'].includes(groupName)) return null;
   return {
     group: groupName,
     source: masterEntry.source,
@@ -389,7 +397,11 @@ async function loadBundledFallback(groupName) {
 
 async function fetchSingleGroupClient(groupName, forceRefresh = false) {
   const config = GROUP_CONFIG[groupName];
-  if (!config) throw new Error(`Unknown group: ${groupName}`);
+  if (!config) {
+    // Derived category (visual, naro, earth, heo, other, featured) -> slice from master 'all'
+    const master = await fetchSingleGroupClient('all', forceRefresh);
+    return sliceMasterForGroup(master, groupName) || master;
+  }
 
   // 1. If master 'all' is already cached, slice sub-groups instantaneously (ZERO API calls!)
   if (groupName !== 'all' && !forceRefresh) {
@@ -508,9 +520,10 @@ export async function fetchSatelliteGroup(groupName, forceRefresh = false) {
     return apiPayload;
   }
 
-  if (groupName === 'featured') {
+  const MASTER_DERIVED_GROUPS = new Set(['featured', 'visual', 'naro', 'earth', 'heo', 'other']);
+  if (MASTER_DERIVED_GROUPS.has(groupName)) {
     const master = await fetchSingleGroupClient('all', forceRefresh);
-    const sliced = sliceMasterForGroup(master, 'featured');
+    const sliced = sliceMasterForGroup(master, groupName);
     if (sliced) return sliced;
   }
 

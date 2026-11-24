@@ -63,7 +63,7 @@
           <input
             id="sat-search"
             type="search"
-            placeholder="위성 이름 또는 NORAD ID 검색 (Enter: 전체 DB 조회)"
+            placeholder="위성명 · NORAD · 국가(SKOR) · 발사장(나로) 검색"
             autocomplete="off"
           />
         </div>
@@ -256,6 +256,31 @@
         </div>
       </div>
 
+      <div class="telemetry-section" id="tel-satcat-section">
+        <div class="section-heading-row">
+          <span class="section-heading">SATCAT 공식 메타데이터</span>
+          <span id="tel-ops-status" class="ops-pill unknown">--</span>
+        </div>
+        <div class="telemetry-grid">
+          <div class="metric-cell compact">
+            <span class="metric-label">소속 국가 · 기관</span>
+            <span id="tel-owner" class="metric-value">--</span>
+          </div>
+          <div class="metric-cell compact">
+            <span class="metric-label">발사일</span>
+            <span id="tel-launch-date" class="metric-value mono">--</span>
+          </div>
+          <div class="metric-cell compact">
+            <span class="metric-label">발사장</span>
+            <span id="tel-launch-site" class="metric-value">--</span>
+          </div>
+          <div class="metric-cell compact">
+            <span class="metric-label">레이더 반사면적 (RCS)</span>
+            <span id="tel-rcs" class="metric-value mono">--</span>
+          </div>
+        </div>
+      </div>
+
       <div class="telemetry-section">
         <div class="section-heading-row">
           <span class="section-heading" id="tel-observer-heading">관측소 시선각 (서울)</span>
@@ -273,6 +298,18 @@
           <div class="metric-cell compact">
             <span class="metric-label">직선거리</span>
             <span id="tel-range" class="metric-value mono">--</span>
+          </div>
+        </div>
+        <div id="tel-visual-box" class="visual-box">
+          <div class="visual-box-head">
+            <span class="visual-title">육안 관측 판정</span>
+            <span id="tel-visual-badge" class="visual-badge neutral">--</span>
+          </div>
+          <div id="tel-visual-detail" class="visual-detail">천문 조도 및 궤도 조건 계산 중...</div>
+          <div class="visual-sub-grid">
+            <span id="tel-sunlit-tag" class="visual-chip">일조 --</span>
+            <span id="tel-sky-tag" class="visual-chip">하늘 --</span>
+            <span id="tel-mag-tag" class="visual-chip mono">밝기 --</span>
           </div>
         </div>
         <div id="tel-pass-box" class="pass-box">

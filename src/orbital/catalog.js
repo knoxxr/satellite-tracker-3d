@@ -2,27 +2,36 @@ export const CATEGORIES = [
   { id: 'all', label: '전체 위성 (ALL)', color: '#38bdf8' },
   { id: 'featured', label: '주요 추천', color: '#0ea5e9' },
   { id: 'favorites', label: '즐겨찾기', color: '#fbbf24' },
+  { id: 'visual', label: '육안 관측·밝은 위성', color: '#fde047' },
   { id: 'korea', label: '한국 위성', color: '#22d3ee' },
+  { id: 'naro', label: '나로우주센터 발사', color: '#38bdf8' },
   { id: 'stations', label: '우주정거장', color: '#f59e0b' },
-  { id: 'weather', label: '기상·지구관측', color: '#10b981' },
+  { id: 'weather', label: '기상·기후', color: '#10b981' },
+  { id: 'earth', label: '지구관측·SAR', color: '#2dd4bf' },
   { id: 'gnss', label: '전세계 GNSS', color: '#60a5fa' },
   { id: 'science', label: '과학·천문', color: '#fb7185' },
   { id: 'geo', label: '정지궤도 GEO', color: '#f97316' },
+  { id: 'heo', label: '타원·몰니야 HEO', color: '#c084fc' },
   { id: 'starlink', label: '스타링크 전체', color: '#e2e8f0' },
   { id: 'comms', label: 'OneWeb·Iridium', color: '#34d399' },
   { id: 'cubesat', label: '큐브·아마추어', color: '#fbbf24' },
   { id: 'recent', label: '최근 30일 발사', color: '#f43f5e' },
+  { id: 'other', label: '기타·다국적', color: '#94a3b8' },
 ];
 
 export const GROUP_COLORS = {
   all: '#38bdf8',
+  visual: '#fde047',
   stations: '#f59e0b',
   korea: '#22d3ee',
+  naro: '#38bdf8',
   weather: '#10b981',
+  earth: '#2dd4bf',
   gnss: '#60a5fa',
   gps: '#60a5fa',
   science: '#fb7185',
   geo: '#f97316',
+  heo: '#c084fc',
   starlink: '#cbd5e1',
   comms: '#34d399',
   cubesat: '#fbbf24',
@@ -33,13 +42,17 @@ export const GROUP_COLORS = {
 
 export const GROUP_LABELS = {
   all: '활성 위성',
+  visual: '밝은 위성',
   stations: '우주정거장',
   korea: '한국 위성',
-  weather: '기상·지구관측',
+  naro: '나로 발사',
+  weather: '기상·기후',
+  earth: '지구관측·SAR',
   gnss: 'GNSS 항법',
   gps: 'GNSS 항법',
   science: '과학·천문',
   geo: '정지궤도 GEO',
+  heo: '타원궤도 HEO',
   starlink: '스타링크 군집',
   comms: '통신 군집',
   cubesat: '큐브·아마추어',
@@ -47,6 +60,101 @@ export const GROUP_LABELS = {
   other: '일반 위성',
   custom: '사용자 추가',
 };
+
+export const SATCAT_OWNERS = {
+  SKOR: '대한민국 (SKOR)',
+  US: '미국 (US)',
+  PRC: '중국 (PRC)',
+  CIS: '러시아 / CIS',
+  UK: '영국 (UK)',
+  JPN: '일본 (JPN)',
+  ESA: '유럽우주국 (ESA)',
+  IND: '인도 (IND)',
+  FR: '프랑스 (FR)',
+  GER: '독일 (GER)',
+  IT: '이탈리아 (IT)',
+  CA: '캐나다 (CA)',
+  SPN: '스페인 (SPN)',
+  TURK: '튀르키예 (TURK)',
+  ISS: '국제우주정거장 (다국적)',
+  EUTE: 'Eutelsat (유럽)',
+  SES: 'SES (룩셈부르크)',
+  ITSO: 'Intelsat (국제)',
+  IM: 'Inmarsat (국제)',
+  O3B: 'O3b Networks',
+  GLOB: 'Globalstar',
+  ORB: 'Orbcomm',
+  AUS: '호주 (AUS)',
+  BRAZ: '브라질 (BRAZ)',
+  ISRA: '이스라엘 (ISRA)',
+  ARGN: '아르헨티나 (ARGN)',
+  SAUD: '사우디아라비아 (SAUD)',
+  UAE: '아랍에미리트 (UAE)',
+  TWN: '대만 (TWN)',
+  SING: '싱가포르 (SING)',
+  NOR: '노르웨이 (NOR)',
+  SWED: '스웨덴 (SWED)',
+  NETH: '네덜란드 (NETH)',
+  POL: '폴란드 (POL)',
+  FIN: '핀란드 (FIN)',
+  TBD: '미지정 (TBD)',
+};
+
+export const SATCAT_LAUNCH_SITES = {
+  NSC: '나로우주센터 (대한민국 고흥)',
+  JJSLA: '제주 남방 해상발사 (대한민국)',
+  AFETR: '케이프 커내버럴 / KSC (미국)',
+  AFWTR: '반덴버그 우주군기지 (미국)',
+  FRGUI: '기아나 우주센터 (쿠루)',
+  TANSC: '다네가시마 우주센터 (일본)',
+  USC: '우치노우라 우주센터 (일본)',
+  TYMSC: '바이코누르 우주기지 (카자흐스탄)',
+  PLMSC: '플레세츠크 우주기지 (러시아)',
+  VOSTO: '보스토치니 우주기지 (러시아)',
+  DLS: '돔바롭스키 기지 (러시아)',
+  RLLB: '마히아 반도 (뉴질랜드)',
+  SRILR: '사티시 다완 우주센터 (인도)',
+  JSC: '주취안 위성발사센터 (중국)',
+  TAISC: '타이위안 위성발사센터 (중국)',
+  WSC: '원창 우주발사장 (중국)',
+  XICLF: '시창 위성발사센터 (중국)',
+  SEAL: '시런치 (태평양 해상)',
+  WLPIS: '월롭스 비행시설 (미국)',
+  KODAK: '코디악 발사장 (미국 알래스카)',
+};
+
+export const SATCAT_OPS_STATUS = {
+  '+': { label: '운용 중', tone: 'active' },
+  '-': { label: '임무 종료', tone: 'inactive' },
+  P: { label: '부분 운용', tone: 'partial' },
+  B: { label: '백업 운용', tone: 'partial' },
+  S: { label: '예비 궤도', tone: 'partial' },
+  X: { label: '연장 임무', tone: 'active' },
+  D: { label: '재진입 소멸', tone: 'inactive' },
+  '?': { label: '상태 미확인', tone: 'unknown' },
+};
+
+export function getOwnerLabel(code) {
+  if (!code) return '정보 없음';
+  return SATCAT_OWNERS[code] || code;
+}
+
+export function getLaunchSiteLabel(code) {
+  if (!code) return '정보 없음';
+  return SATCAT_LAUNCH_SITES[code] || code;
+}
+
+export function getOpsStatusInfo(code) {
+  if (!code) return { label: '정보 없음', tone: 'unknown' };
+  return SATCAT_OPS_STATUS[code] || { label: code, tone: 'unknown' };
+}
+
+export function getRcsSizeLabel(rcs) {
+  const val = Number(rcs);
+  if (!Number.isFinite(val) || val <= 0) return '비공개 / 미측정';
+  const grade = val >= 5 ? '대형' : val >= 1 ? '중형' : val >= 0.1 ? '소형' : '초소형';
+  return `${val.toFixed(2)} m² (${grade})`;
+}
 
 export const OBSERVER_PRESETS = [
   { id: 'seoul', name: '서울 (Seoul)', lat: 37.5665, lon: 126.978, heightKm: 0.04 },
@@ -64,11 +172,11 @@ export const OBSERVER_PRESETS = [
 export const NOTABLE_SATELLITES = {
   25544: {
     koName: '국제우주정거장 (ISS)',
-    summary: '고도 약 420km 저궤도를 92분마다 공전하는 인류 최대 유인 우주정거장',
+    summary: '고도 약 420km 저궤도를 92분마다 공전하는 인류 최대 유인 우주정거장 (육안 관측 최상)',
   },
   48274: {
     koName: '중국 톈궁 우주정거장 (톈허)',
-    summary: '중국 유인 우주정거장 톈궁의 핵심 모듈(Tianhe)',
+    summary: '중국 유인 우주정거장 톈궁의 핵심 모듈(Tianhe) · 매우 밝은 육안 관측 대상',
   },
   20580: {
     koName: '허블 우주망원경 (HST)',
@@ -82,41 +190,53 @@ export const NOTABLE_SATELLITES = {
     koName: '우리별 2호 (KITSAT-2)',
     summary: '1993년 국내 기술진 주도로 제작된 대한민국 두 번째 인공위성',
   },
+  23639: {
+    koName: '무궁화 1호 (KOREASAT 1)',
+    summary: '1995년 발사된 대한민국 최초의 상용 정지궤도 통신·방송 위성',
+  },
   25756: {
     koName: '우리별 3호 (KITSAT-3)',
     summary: '1999년 독자 설계·개발된 대한민국 최초 고유 모델 과학실험위성',
+  },
+  26032: {
+    koName: '아리랑 1호 (KOMPSAT-1)',
+    summary: '1999년 발사된 대한민국 최초의 다목적실용위성',
+  },
+  27945: {
+    koName: '과학기술위성 1호 (STSAT-1)',
+    summary: '2003년 발사된 국산 우주망원경 탑재 과학기술위성',
+  },
+  29268: {
+    koName: '아리랑 2호 (KOMPSAT-2)',
+    summary: '1m급 고해상도 광학 카메라를 탑재한 다목적실용위성 2호',
+  },
+  29349: {
+    koName: '무궁화 5호 (KOREASAT 5)',
+    summary: '민·군 공용 정지궤도 통신·방송 위성',
   },
   36744: {
     koName: '천리안 1호 (COMS-1)',
     summary: '2010년 발사된 대한민국 최초의 정지궤도 통신·해양·기상 복합위성',
   },
+  37265: {
+    koName: '무궁화 6호 (KOREASAT 6)',
+    summary: 'KT SAT 정지궤도 방송·위성통신 주력 위성',
+  },
   38338: {
     koName: '아리랑 3호 (KOMPSAT-3)',
-    summary: '대한민국 다목적실용위성 3호 · 고해상도 광학 지구관측 위성',
+    summary: '대한민국 다목적실용위성 3호 · 0.7m급 고해상도 광학 지구관측 위성',
   },
   39227: {
     koName: '아리랑 5호 (KOMPSAT-5)',
     summary: '대한민국 최초 영상레이더(SAR) 탑재 전천후 지구관측 위성',
   },
+  39422: {
+    koName: '과학기술위성 3호 (STSAT-3)',
+    summary: '적외선 우주·지구 관측 카메라를 탑재한 국산 과학위성',
+  },
   40536: {
     koName: '아리랑 3A호 (KOMPSAT-3A)',
     summary: '초고해상도 광학 + 적외선 센서 탑재 다목적실용위성',
-  },
-  66820: {
-    koName: '아리랑 7호 (KOMPSAT-7)',
-    summary: '0.3m급 초고해상도 광학 관측 능력을 갖춘 차세대 다목적실용위성',
-  },
-  43823: {
-    koName: '천리안 2A호 (GK-2A)',
-    summary: '동경 128.2° 정지궤도에서 한반도 기상·우주기상을 상시 감시하는 위성',
-  },
-  45246: {
-    koName: '천리안 2B호 (GK-2B)',
-    summary: '동경 128.2° 정지궤도에서 한반도 해양·대기환경(미세먼지)을 관측하는 위성',
-  },
-  47932: {
-    koName: '차세대중형위성 1호 (국토위성)',
-    summary: '국내 독자 개발 500kg급 표준 플랫폼 정밀 지상관측 위성',
   },
   42691: {
     koName: '무궁화 7호 (KOREASAT 7)',
@@ -126,21 +246,145 @@ export const NOTABLE_SATELLITES = {
     koName: '무궁화 5A호 (KOREASAT 5A)',
     summary: '동아시아·해상 광역 커버리지 정지궤도 통신 위성',
   },
-  61910: {
-    koName: '무궁화 6A호 (KOREASAT 6A)',
-    summary: 'KT SAT 차세대 정지궤도 통신 위성 (2024년 발사)',
+  43782: {
+    koName: '서울대 위성 2호 (SNUSAT-2)',
+    summary: '서울대학교 개발 지구관측 초소형 큐브위성',
   },
-  59587: {
-    koName: '초소형군집위성 1호 (NEONSAT-1)',
-    summary: '한반도 정밀 감시를 위한 대한민국 초소형 군집위성 선도기',
+  43811: {
+    koName: '차세대소형위성 1호 (NEXTSAT-1)',
+    summary: 'KAIST 인공위성연구소 개발 우주과학·핵심기술 검증 소형위성',
+  },
+  43823: {
+    koName: '천리안 2A호 (GK-2A)',
+    summary: '동경 128.2° 정지궤도에서 한반도 기상·우주기상을 상시 감시하는 위성',
+  },
+  45246: {
+    koName: '천리안 2B호 (GK-2B)',
+    summary: '동경 128.2° 정지궤도에서 한반도 해양·대기환경(미세먼지)을 관측하는 위성',
+  },
+  45920: {
+    koName: '아나시스 2호 (KOREASAT 116)',
+    summary: '대한민국 최초 군 전용 정지궤도 통신위성 (ANASIS-II)',
+  },
+  47932: {
+    koName: '차세대중형위성 1호 (국토위성)',
+    summary: '국내 독자 개발 500kg급 표준 플랫폼 정밀 지상관측 위성',
+  },
+  52894: {
+    koName: '누리호 성능검증위성 (PVSAT)',
+    summary: '2022년 누리호 2차 발사 성공으로 나로우주센터에서 궤도에 안착한 위성',
   },
   56743: {
     koName: '차세대소형위성 2호 (NEXTSAT-2)',
     summary: '누리호 3차 발사로 궤도에 안착한 국산 소형 SAR 영상레이더 위성',
   },
+  56744: {
+    koName: '도요샛 4호 라온 (SNIPE 4)',
+    summary: '한국천문연구원 개발 편대비행 우주날씨 관측 큐브위성',
+  },
+  56745: {
+    koName: '도요샛 2호 나래 (SNIPE 2)',
+    summary: '한국천문연구원 개발 편대비행 우주날씨 관측 큐브위성',
+  },
+  58323: {
+    koName: '옵저버-1A (OBSERVER-1A)',
+    summary: '나라스페이스테크놀로지 개발 국내 민간 초소형 지구관측 위성',
+  },
+  58463: {
+    koName: '군정찰위성 1호기 (KORSAT-7)',
+    summary: '대한민국 425 사업 고해상도 전자광학·적외선(EO/IR) 정찰위성 (공개 궤도)',
+  },
+  59117: {
+    koName: '컨텍샛-1 (CONTECSAT-1)',
+    summary: '국내 우주기업 컨텍(CONTEC)이 운용하는 광학 지구관측 위성',
+  },
+  59452: {
+    koName: '군정찰위성 2호기 (KORSAT-1)',
+    summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
+  },
+  59587: {
+    koName: '초소형군집위성 1호 (NEONSAT-1)',
+    summary: '한반도 정밀 감시를 위한 대한민국 초소형 군집위성 선도기',
+  },
+  61910: {
+    koName: '무궁화 6A호 (KOREASAT 6A)',
+    summary: 'KT SAT 차세대 정지궤도 통신 위성 (2024년 발사)',
+  },
+  62377: {
+    koName: '군정찰위성 3호기 (KORSAT-2)',
+    summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
+  },
+  63210: {
+    koName: '진주샛-1B (JINJUSAT-1B)',
+    summary: '경상남도 진주시·경상국립대·KTL 공동 개발 초소형 지구관측 큐브위성',
+  },
+  63229: {
+    koName: '스페이스아이-T1 (SPACEEYE-T1)',
+    summary: '쎄트렉아이 자체 개발 30cm급 초고해상도 상용 광학 지구관측 위성',
+  },
+  63630: {
+    koName: '군정찰위성 4호기 (KORSAT-3)',
+    summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
+  },
+  66293: {
+    koName: '군정찰위성 5호기 (KORSAT-4)',
+    summary: '대한민국 425 사업 전천후 영상레이더(SAR) 정찰위성 (공개 궤도)',
+  },
+  66655: {
+    koName: '차세대중형위성 3호 (CAS500-3)',
+    summary: '누리호 4차 발사로 나로우주센터에서 궤도에 안착한 우주과학·기술검증 위성',
+  },
   66771: {
     koName: '경기기후위성 1호 (GYEONGGISAT-1)',
     summary: '경기도 온실가스·기후변화 정밀 관측용 초소형 위성',
+  },
+  66820: {
+    koName: '아리랑 7호 (KOMPSAT-7)',
+    summary: '0.3m급 초고해상도 광학 관측 능력을 갖춘 차세대 다목적실용위성',
+  },
+  67614: {
+    koName: '초소형군집위성 1A호 (NEONSAT-1A)',
+    summary: '한반도 재방문 주기를 단축하는 대한민국 초소형 군집위성',
+  },
+  68989: {
+    koName: '부산샛 (BUSANSAT)',
+    summary: '부산광역시 해양 미세먼지·연안 환경 관측용 초소형 위성',
+  },
+  69013: {
+    koName: '차세대중형위성 2호 (CAS500-2)',
+    summary: '국토·자원 관리용 500kg급 고해상도 광학 지구관측 위성',
+  },
+  69869: {
+    koName: '차세대중형위성 4호 (CAS500-4)',
+    summary: '농림·산림·수자원 광역 정밀 관측용 농림위성',
+  },
+  100950: {
+    koName: '경기기후위성 2A호 (GYEONGGISAT-2A)',
+    summary: '경기도 온실가스 정밀 감시용 차세대 기후위성',
+  },
+  100955: {
+    koName: '초소형군집위성 2호 (NEONSAT-02)',
+    summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
+  },
+  100961: {
+    koName: '초소형군집위성 3호 (NEONSAT-03)',
+    summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
+  },
+  100962: {
+    koName: '초소형군집위성 4호 (NEONSAT-04)',
+    summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
+  },
+  100963: {
+    koName: '초소형군집위성 5호 (NEONSAT-05)',
+    summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
+  },
+  100967: {
+    koName: '대전샛-1 (DAEJEONSAT-1)',
+    summary: '대전광역시 산학연 공동 개발 지역 우주산업 초소형 위성',
+  },
+  100968: {
+    koName: '초소형군집위성 6호 (NEONSAT-06)',
+    summary: '나로우주센터에서 발사된 대한민국 초소형 군집위성 양산기',
   },
   43013: {
     koName: 'NOAA-20 (JPSS-1)',
@@ -153,36 +397,89 @@ export const NOTABLE_SATELLITES = {
 };
 
 const STATION_IDS = new Set([25544, 48274, 49044, 53239, 54216]);
-const KOREA_IDS = new Set([22077, 22828, 25756, 36744, 38338, 39227, 40536, 42691, 42984, 43784, 43823, 45246, 47932, 52898, 52899, 52900, 56743, 59587, 61910, 66661, 66771, 66820, 100950]);
+const KOREA_IDS = new Set([
+  22077, 22828, 23639, 25756, 26032, 27945, 29268, 29349, 36744, 37265,
+  38338, 39227, 39422, 40536, 42691, 42984, 43782, 43784, 43811, 43823,
+  45246, 45920, 47932, 52894, 52895, 52897, 52898, 52899, 52900, 56743,
+  56744, 56745, 58323, 58463, 58500, 59117, 59452, 59587, 61910, 62377,
+  63210, 63229, 63630, 66293, 66650, 66653, 66655, 66657, 66658, 66660,
+  66661, 66662, 66771, 66820, 67614, 68417, 68989, 69013, 69869, 100899,
+  100950, 100955, 100956, 100957, 100958, 100961, 100962, 100963, 100967, 100968,
+]);
 
 export function isKoreanSatellite(omm) {
-  const id = Number(omm?.NORAD_CAT_ID);
-  if (KOREA_IDS.has(id)) return true;
-  const name = String(omm?.OBJECT_NAME || '').toUpperCase();
+  if (!omm) return false;
+  const name = String(omm.OBJECT_NAME || '').toUpperCase();
   if (name.includes('DEB') || name.includes('R/B')) return false;
+  if (omm._ow === 'SKOR') return true;
+  const id = Number(omm.NORAD_CAT_ID);
+  if (KOREA_IDS.has(id)) return true;
   return (
     name.includes('KOMPSAT') ||
     name.includes('ARIRANG') ||
     name.includes('KOREASAT') ||
+    name.includes('KORSAT') ||
     name.includes('CAS500') ||
     name.includes('NEXTSAT') ||
     name.includes('NEONSAT') ||
     name.includes('KITSAT') ||
     name.includes('SNUGLITE') ||
+    name.includes('SNUSAT') ||
+    name.includes('SNIPE ') ||
     name.includes('MIMAN') ||
     name.includes('RANDEV') ||
     name.includes('GYEONGGI') ||
+    name.includes('BUSANSAT') ||
+    name.includes('DAEJEONSAT') ||
+    name.includes('JINJUSAT') ||
+    name.includes('SPACEEYE') ||
+    name.includes('CONTECSAT') ||
+    name.includes('OBSERVER-1') ||
     name.includes('GK-2') ||
     name.startsWith('STSAT')
   );
 }
 
+export function isEarthObservationSatellite(omm) {
+  const name = String(omm?.OBJECT_NAME || '').toUpperCase();
+  return (
+    name.includes('LANDSAT') ||
+    name.includes('SENTINEL') ||
+    name.includes('KOMPSAT') ||
+    name.includes('ARIRANG') ||
+    name.includes('CAS500') ||
+    name.includes('NEONSAT') ||
+    name.includes('SPACEEYE') ||
+    name.includes('FLOCK') ||
+    name.includes('DOVE') ||
+    name.includes('SKYSAT') ||
+    name.includes('PELICAN') ||
+    name.includes('ICEYE') ||
+    name.includes('CAPELLA') ||
+    name.includes('UMBRA') ||
+    name.includes('BLACKSKY') ||
+    name.includes('WORLDVIEW') ||
+    name.includes('GEOEYE') ||
+    name.includes('PLEIADES') ||
+    name.includes('SPOT ') ||
+    name.includes('RADARSAT') ||
+    name.includes('COSMO-SKYMED') ||
+    name.includes('TERRA') ||
+    name.includes('AQUA') ||
+    name.includes('ALOS') ||
+    name.includes('GAOFEN') ||
+    name.includes('JILIN') ||
+    name.includes('YAOGAN') ||
+    name.includes('SUPERDOVE')
+  );
+}
+
 /**
  * Strip non-essential OMM keys while preserving every field required by satellite.js json2satrec()
- * and OrbitPulse UI. Reduces 16,900-satellite JSON payload by ~35%.
+ * and SATCAT metadata (_ow, _ld, _ls, _st, _rcs). Reduces 16,900-satellite JSON payload by ~35%.
  */
 export function compactOmmRecord(omm, groupTag = null) {
-  return {
+  const out = {
     OBJECT_NAME: omm.OBJECT_NAME,
     OBJECT_ID: omm.OBJECT_ID,
     EPOCH: omm.EPOCH,
@@ -198,6 +495,14 @@ export function compactOmmRecord(omm, groupTag = null) {
     MEAN_MOTION_DDOT: omm.MEAN_MOTION_DDOT,
     _group: groupTag || omm._group || classifySatelliteGroup(omm),
   };
+  if (omm._ow) out._ow = omm._ow;
+  if (omm._ld) out._ld = omm._ld;
+  if (omm._ls) out._ls = omm._ls;
+  if (omm._st) out._st = omm._st;
+  if (Number.isFinite(Number(omm._rcs)) && Number(omm._rcs) > 0) {
+    out._rcs = Number(omm._rcs);
+  }
+  return out;
 }
 
 /**
@@ -229,7 +534,9 @@ export function classifySatelliteGroup(omm) {
     name.includes('IRIDIUM') ||
     name.includes('GLOBALSTAR') ||
     name.includes('KUIPER') ||
-    name.includes('ORBCOMM')
+    name.includes('ORBCOMM') ||
+    name.includes('BLUEWALKER') ||
+    name.includes('BLUEBIRD')
   ) {
     return 'comms';
   }
@@ -255,7 +562,9 @@ export function classifySatelliteGroup(omm) {
     name.includes('NUSTAR') ||
     name.includes('INTEGRAL') ||
     name.includes('XMM') ||
-    name.includes('HINODE')
+    name.includes('HINODE') ||
+    name.includes('XRISM') ||
+    name.includes('EINSTEIN PROBE')
   ) {
     return 'science';
   }
@@ -267,31 +576,30 @@ export function classifySatelliteGroup(omm) {
     name.includes('METOP') ||
     name.includes('METEOR-M') ||
     name.includes('FENGYUN') ||
-    name.includes('LANDSAT') ||
-    name.includes('SENTINEL') ||
-    name.includes('TERRA') ||
-    name.includes('AQUA') ||
-    name.includes('AURA') ||
     name.includes('SUOMI') ||
     name.includes('JASON') ||
     name.includes('SWOT') ||
     name.includes('CRYOSAT') ||
     name.includes('SMAP') ||
-    name.includes('GPM')
+    name.includes('GPM') ||
+    name.includes('AURA')
   ) {
     return 'weather';
+  }
+  if (isEarthObservationSatellite(omm)) {
+    return 'earth';
   }
   if (meanMotion >= 0.95 && meanMotion <= 1.06 && ecc < 0.05) {
     return 'geo';
   }
+  if (ecc >= 0.25) {
+    return 'heo';
+  }
   if (
     name.includes('CUBE') ||
     name.includes('OSCAR') ||
-    name.includes('FLOCK') ||
     name.includes('LEMUR') ||
-    name.includes('DOVE') ||
-    name.includes('UMBRA') ||
-    name.includes('ICEYE')
+    name.includes('SPIRE')
   ) {
     return 'cubesat';
   }
@@ -299,20 +607,44 @@ export function classifySatelliteGroup(omm) {
 }
 
 /**
- * Derive any of the 13 categories locally from the master active satellite dataset
+ * Derive any of the 18 categories locally from the master active satellite dataset
  * so switching tabs makes ZERO extra upstream API calls.
  */
-export function filterSatellitesByCategory(allSatellites, groupName, recentIdSet = null) {
+export function filterSatellitesByCategory(allSatellites, groupName, options = null) {
   if (!Array.isArray(allSatellites) || allSatellites.length === 0) return [];
   if (groupName === 'all') return allSatellites;
+
+  // Backwards-compatible: options can be a Set (recentIdSet) or { recentIdSet, brightIdSet }
+  const recentIdSet = options instanceof Set ? options : options?.recentIdSet || null;
+  const brightIdSet = options instanceof Set ? null : options?.brightIdSet || null;
 
   if (groupName === 'featured') {
     const featuredGroups = new Set(['stations', 'korea', 'weather', 'gnss', 'science']);
     return allSatellites.filter((s) => featuredGroups.has(s._group || classifySatelliteGroup(s)));
   }
 
+  if (groupName === 'visual') {
+    return allSatellites.filter((s) => {
+      const id = Number(s.NORAD_CAT_ID);
+      if (STATION_IDS.has(id) || id === 20580) return true;
+      if (brightIdSet && brightIdSet.has(id)) return true;
+      const rcs = Number(s._rcs || 0);
+      const mm = Number(s.MEAN_MOTION || 0);
+      // Large LEO spacecraft (RCS >= 3 m² and altitude < ~2000 km) are prime naked-eye targets
+      return rcs >= 3.0 && mm >= 11.2;
+    });
+  }
+
   if (groupName === 'korea') {
     return allSatellites.filter((s) => isKoreanSatellite(s));
+  }
+
+  if (groupName === 'naro') {
+    return allSatellites.filter((s) => s._ls === 'NSC');
+  }
+
+  if (groupName === 'earth') {
+    return allSatellites.filter((s) => isEarthObservationSatellite(s));
   }
 
   if (groupName === 'geo') {
@@ -321,6 +653,10 @@ export function filterSatellitesByCategory(allSatellites, groupName, recentIdSet
       const ecc = Number(s.ECCENTRICITY || 0);
       return mm >= 0.95 && mm <= 1.06 && ecc < 0.05;
     });
+  }
+
+  if (groupName === 'heo') {
+    return allSatellites.filter((s) => Number(s.ECCENTRICITY || 0) >= 0.25);
   }
 
   if (groupName === 'gps') {
@@ -334,7 +670,6 @@ export function filterSatellitesByCategory(allSatellites, groupName, recentIdSet
     if (recentIdSet && recentIdSet.size > 0) {
       return allSatellites.filter((s) => recentIdSet.has(Number(s.NORAD_CAT_ID)));
     }
-    // Fallback heuristic: highest catalog numbers / current launch year
     const sorted = [...allSatellites].sort(
       (a, b) => Number(b.NORAD_CAT_ID || 0) - Number(a.NORAD_CAT_ID || 0)
     );

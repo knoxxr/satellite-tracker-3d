@@ -12,12 +12,18 @@ export function buildRecordFromOmm(omm) {
   try {
     const satrec = satellite.json2satrec(omm);
     if (!satrec || satrec.error !== 0) return null;
+    const rcsNum = Number(omm._rcs);
     return enrichRecord({
       id: Number(omm.NORAD_CAT_ID),
       name: String(omm.OBJECT_NAME || `SAT-${omm.NORAD_CAT_ID}`).trim(),
       cosparId: omm.OBJECT_ID || '—',
       epoch: omm.EPOCH || null,
       group: omm._group || 'custom',
+      owner: omm._ow || null,
+      launchDate: omm._ld || null,
+      launchSite: omm._ls || null,
+      opsStatus: omm._st || null,
+      rcs: Number.isFinite(rcsNum) && rcsNum > 0 ? rcsNum : null,
       satrec,
       raw: omm,
     });
@@ -339,8 +345,197 @@ export function predictNextPass(record, startDate, observer, maxHours = 24) {
   };
 }
 
+const AU_KM = 149597870.7;
+
+const STANDARD_MAG_BY_ID = {
+  25544: -1.8, // ISS
+  48274: -1.0, // CSS Tianhe (Tiangong)
+  20580: 2.0,  // Hubble Space Telescope
+};
+
 /**
- * Predict up to maxPasses upcoming visible passes over the observer within maxHours (default 48h).
+ * Compute approximate geocentric Sun ECI position vector (km) using standard Astronomical Almanac equations (~0.01° accuracy).
+ */
+export function computeSunEciKm(date) {
+  const jd = date.getTime() / 86400000 + 2440587.5;
+  const n = jd - 2451545.0;
+  const L = ((280.46 + 0.9856474 * n) % 360 + 360) % 360;
+  const g = (((357.528 + 0.9856003 * n) % 360 + 360) % 360) * DEG_TO_RAD;
+  const lambda = (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * DEG_TO_RAD;
+  const eps = (23.439 - 0.0000004 * n) * DEG_TO_RAD;
+  const rAu = 1.00014 - 0.01671 * Math.cos(g) - 0.00014 * Math.cos(2 * g);
+  const rKm = rAu * AU_KM;
+  return {
+    x: rKm * Math.cos(lambda),
+    y: rKm * Math.cos(eps) * Math.sin(lambda),
+    z: rKm * Math.sin(eps) * Math.sin(lambda),
+  };
+}
+
+/**
+ * Determine whether a satellite in ECI (km) is sunlit or inside Earth's cylindrical shadow (umbra).
+ */
+export function isSatelliteSunlit(posEci, sunEci) {
+  if (!posEci || !sunEci) return false;
+  const sunMag = Math.hypot(sunEci.x, sunEci.y, sunEci.z);
+  if (!sunMag) return false;
+  const ux = sunEci.x / sunMag;
+  const uy = sunEci.y / sunMag;
+  const uz = sunEci.z / sunMag;
+
+  const dot = posEci.x * ux + posEci.y * uy + posEci.z * uz;
+  if (dot >= 0) return true; // Dayside of Earth
+
+  // Perpendicular distance from Earth-Sun shadow axis
+  const px = posEci.x - dot * ux;
+  const py = posEci.y - dot * uy;
+  const pz = posEci.z - dot * uz;
+  const perpDistKm = Math.hypot(px, py, pz);
+  return perpDistKm > EARTH_RADIUS_KM;
+}
+
+/**
+ * Compute Sun elevation angle (deg) from a ground observer at a given Date.
+ */
+export function computeSolarElevationDeg(observer, date, sunEci = null) {
+  const sEci = sunEci || computeSunEciKm(date);
+  const gmst = satellite.gstime(date);
+  const sunEcf = satellite.eciToEcf(sEci, gmst);
+  const observerGd = {
+    longitude: observer.lon * DEG_TO_RAD,
+    latitude: observer.lat * DEG_TO_RAD,
+    height: observer.heightKm ?? 0.04,
+  };
+  const look = satellite.ecfToLookAngles(observerGd, sunEcf);
+  return look.elevation * RAD_TO_DEG;
+}
+
+/**
+ * Compute real-time naked-eye visual visibility judgment & estimated visual magnitude
+ * based on satellite elevation, Earth-shadow illumination (Sunlit/Umbra), observer twilight/night sky,
+ * solar phase angle, slant range, and SATCAT RCS.
+ */
+export function computeVisualVisibility(record, pos, look, observer, date) {
+  if (!record || !pos || !look || !observer) return null;
+
+  const sunEci = computeSunEciKm(date);
+  const sunlit = isSatelliteSunlit(pos.posEci, sunEci);
+  const sunElDeg = computeSolarElevationDeg(observer, date, sunEci);
+
+  let skyState = 'night';
+  let skyLabel = '완전 야간';
+  if (sunElDeg > 0) {
+    skyState = 'day';
+    skyLabel = '주간 (낮)';
+  } else if (sunElDeg > -6) {
+    skyState = 'civil';
+    skyLabel = '시민 박명';
+  } else if (sunElDeg > -18) {
+    skyState = 'nautical';
+    skyLabel = '박명 (관측 최적)';
+  }
+
+  // Estimate apparent visual magnitude using Lambertian phase function + SATCAT RCS
+  let estMag = null;
+  if (sunlit && look.rangeKm > 0) {
+    const gmst = pos.gmst ?? satellite.gstime(date);
+    const obsGd = {
+      longitude: observer.lon * DEG_TO_RAD,
+      latitude: observer.lat * DEG_TO_RAD,
+      height: observer.heightKm ?? 0.04,
+    };
+    const obsEci = satellite.geodeticToEcf(obsGd);
+    const satEcf = satellite.eciToEcf(pos.posEci, gmst);
+    const sunEcf = satellite.eciToEcf(sunEci, gmst);
+
+    // Vector from satellite to Sun & from satellite to Observer
+    const toSunX = sunEcf.x - satEcf.x;
+    const toSunY = sunEcf.y - satEcf.y;
+    const toSunZ = sunEcf.z - satEcf.z;
+    const toObsX = obsEci.x - satEcf.x;
+    const toObsY = obsEci.y - satEcf.y;
+    const toObsZ = obsEci.z - satEcf.z;
+    const magSun = Math.hypot(toSunX, toSunY, toSunZ) || 1;
+    const magObs = Math.hypot(toObsX, toObsY, toObsZ) || 1;
+    const cosPhi = Math.max(
+      -1,
+      Math.min(1, (toSunX * toObsX + toSunY * toObsY + toSunZ * toObsZ) / (magSun * magObs))
+    );
+    const phi = Math.acos(cosPhi); // Phase angle: 0 = full illumination, pi = backlit
+    const phaseFactor = Math.max(0.02, (Math.sin(phi) + (Math.PI - phi) * Math.cos(phi)) / Math.PI);
+
+    let stdMag = STANDARD_MAG_BY_ID[record.id];
+    if (stdMag === undefined) {
+      if (record.rcs && record.rcs > 0) {
+        stdMag = Math.max(-0.5, Math.min(8.5, 4.8 - 2.5 * Math.log10(record.rcs)));
+      } else if (record.group === 'starlink') {
+        stdMag = 5.4;
+      } else if (record.group === 'stations') {
+        stdMag = -0.5;
+      } else if (record.group === 'cubesat') {
+        stdMag = 8.0;
+      } else if (record.regime === 'GEO') {
+        stdMag = 4.5;
+      } else {
+        stdMag = 5.8;
+      }
+    }
+
+    estMag = stdMag + 5 * Math.log10(Math.max(100, look.rangeKm) / 1000) - 2.5 * Math.log10(phaseFactor);
+    estMag = Math.round(estMag * 10) / 10;
+  }
+
+  let status = 'BELOW_HORIZON';
+  let label = '지평선 아래';
+  let detail = '현재 관측소 지평선 아래에 위치해 보이지 않습니다.';
+  let canSeeNakedEye = false;
+
+  if (look.elevationDeg <= 0) {
+    status = 'BELOW_HORIZON';
+    label = '지평선 아래';
+    detail = '현재 관측소 상공을 지나고 있지 않습니다.';
+  } else if (!sunlit) {
+    status = 'IN_EARTH_SHADOW';
+    label = '지구 그림자 (식 상태)';
+    detail = '상공을 통과 중이지만 지구 그림자에 가려 태양빛을 반사하지 못합니다.';
+  } else if (sunElDeg > -1) {
+    status = 'DAYTIME_SKY';
+    label = '주간 하늘 · 관측 불가';
+    detail = `위성은 태양빛을 받고 있으나 관측소 하늘이 밝아(태양 고도 ${sunElDeg.toFixed(1)}°) 육안 관측이 어렵습니다.`;
+  } else {
+    const nakedLimit = sunElDeg > -6 ? 1.5 : 5.5;
+    if (estMag !== null && estMag <= nakedLimit && look.elevationDeg >= 8) {
+      status = 'VISIBLE_NAKED_EYE';
+      canSeeNakedEye = true;
+      label = '육안 관측 가능!';
+      detail = `태양빛 반사 중 + 어두운 하늘 조건 충족 (추정 밝기 ${estMag > 0 ? '+' : ''}${estMag.toFixed(1)}등급)`;
+    } else if (estMag !== null && estMag <= 8.5) {
+      status = 'VISIBLE_BINOCULAR';
+      label = '쌍안경 관측 가능';
+      detail = `맨눈으로는 희미하나 쌍안경으로 관측 가능 (추정 밝기 +${estMag.toFixed(1)}등급)`;
+    } else {
+      status = 'TOO_FAINT';
+      label = '매우 어두움 (망원경 필요)';
+      detail = `거리·크기 특성상 맨눈 관측이 어렵습니다${estMag !== null ? ` (추정 +${estMag.toFixed(1)}등급)` : ''}.`;
+    }
+  }
+
+  return {
+    status,
+    label,
+    detail,
+    canSeeNakedEye,
+    sunlit,
+    sunElDeg,
+    skyState,
+    skyLabel,
+    estMag,
+  };
+}
+
+/**
+ * Predict up to maxPasses upcoming visible passes over the observer within maxHours (default 48h),
+ * including astronomical naked-eye visual visibility judgment at each pass peak (TCA).
  */
 export function predictUpcomingPasses(record, startDate, observer, maxHours = 48, maxPasses = 5) {
   const currentProp = propagateSatellite(record, startDate);
@@ -369,6 +564,14 @@ export function predictUpcomingPasses(record, startDate, observer, maxHours = 48
   let maxEl = inPass ? currentLook.elevationDeg : -90;
   let maxTimeMs = inPass ? startMs : null;
   let aosAz = inPass ? currentLook.azimuthDeg : 0;
+
+  const evaluatePeakVisual = (peakMs) => {
+    const tDate = new Date(peakMs);
+    const p = propagateSatellite(record, tDate);
+    if (!p) return null;
+    const l = computeLookAngles(p, observer);
+    return l ? computeVisualVisibility(record, p, l, observer, tDate) : null;
+  };
 
   for (let t = startMs + coarseStepMs; t <= endMs && passes.length < maxPasses; t += coarseStepMs) {
     const prop = propagateSatellite(record, new Date(t));
@@ -425,15 +628,17 @@ export function predictUpcomingPasses(record, startDate, observer, maxHours = 48
         }
       }
 
+      const peakMs = maxTimeMs || aosMs;
       passes.push({
         status: isInitialVisible ? 'VISIBLE_NOW' : 'UPCOMING',
         aos: new Date(aosMs),
-        maxTime: new Date(maxTimeMs || aosMs),
+        maxTime: new Date(peakMs),
         los: new Date(losMs),
         durationSec: Math.max(0, Math.round((losMs - aosMs) / 1000)),
         maxElevationDeg: maxEl,
         aosAzimuthDeg: aosAz,
         losAzimuthDeg: losAz,
+        visual: evaluatePeakVisual(peakMs),
       });
 
       inPass = false;
@@ -446,15 +651,17 @@ export function predictUpcomingPasses(record, startDate, observer, maxHours = 48
 
   // Handle a pass still open at the end of the search window
   if (inPass && aosMs !== null && passes.length < maxPasses) {
+    const peakMs = maxTimeMs || aosMs;
     passes.push({
       status: isInitialVisible ? 'VISIBLE_NOW' : 'UPCOMING',
       aos: new Date(aosMs),
-      maxTime: new Date(maxTimeMs || aosMs),
+      maxTime: new Date(peakMs),
       los: null,
       durationSec: null,
       maxElevationDeg: maxEl,
       aosAzimuthDeg: aosAz,
       losAzimuthDeg: 0,
+      visual: evaluatePeakVisual(peakMs),
     });
   }
 

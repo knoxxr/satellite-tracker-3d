@@ -3,6 +3,10 @@ import {
   OBSERVER_PRESETS,
   getCategoryColor,
   getGroupLabel,
+  getLaunchSiteLabel,
+  getOpsStatusInfo,
+  getOwnerLabel,
+  getRcsSizeLabel,
   getSatelliteDisplayInfo,
   getSatelliteModelMeta,
 } from '../orbital/catalog.js';
@@ -136,11 +140,22 @@ export class HudController {
       telInc: $('tel-inc'),
       telApsis: $('tel-apsis'),
       telFootprint: $('tel-footprint'),
+      telOpsStatus: $('tel-ops-status'),
+      telOwner: $('tel-owner'),
+      telLaunchDate: $('tel-launch-date'),
+      telLaunchSite: $('tel-launch-site'),
+      telRcs: $('tel-rcs'),
       telObserverHeading: $('tel-observer-heading'),
       telVisibilityPill: $('tel-visibility-pill'),
       telAz: $('tel-az'),
       telEl: $('tel-el'),
       telRange: $('tel-range'),
+      telVisualBox: $('tel-visual-box'),
+      telVisualBadge: $('tel-visual-badge'),
+      telVisualDetail: $('tel-visual-detail'),
+      telSunlitTag: $('tel-sunlit-tag'),
+      telSkyTag: $('tel-sky-tag'),
+      telMagTag: $('tel-mag-tag'),
       telPassBox: $('tel-pass-box'),
 
       timeScrubberBar: $('time-scrubber-bar'),
@@ -839,7 +854,7 @@ export class HudController {
     this.renderedBatchCount = end;
   }
 
-  updateTelemetry(record, pos, look, observer, passInfo, isFav = false) {
+  updateTelemetry(record, pos, look, observer, passInfo, isFav = false, visual = null) {
     if (!record || !pos) {
       this.el.telemetryPanel.hidden = true;
       return;
@@ -885,6 +900,17 @@ export class HudController {
     this.el.telApsis.textContent = `${Math.round(record.perigeeKm)} / ${Math.round(record.apogeeKm)} km`;
     this.el.telFootprint.textContent = `${Math.round(pos.footprintRadiusKm).toLocaleString()} km`;
 
+    // SATCAT official metadata
+    if (this.el.telOwner) {
+      this.el.telOwner.textContent = getOwnerLabel(record.owner);
+      this.el.telLaunchDate.textContent = record.launchDate || '정보 없음';
+      this.el.telLaunchSite.textContent = getLaunchSiteLabel(record.launchSite);
+      this.el.telRcs.textContent = getRcsSizeLabel(record.rcs);
+      const ops = getOpsStatusInfo(record.opsStatus);
+      this.el.telOpsStatus.textContent = ops.label;
+      this.el.telOpsStatus.className = `ops-pill ${ops.tone}`;
+    }
+
     if (observer && look) {
       this.el.telObserverHeading.textContent = `관측소 시선각 (${observer.name.split(' ')[0]})`;
       this.el.telAz.textContent = `${look.azimuthDeg.toFixed(1)}° ${look.compass}`;
@@ -894,6 +920,32 @@ export class HudController {
       this.el.telVisibilityPill.textContent = look.visible ? '현재 가시권 (상공)' : '지평선 아래';
     }
 
+    // Real-time naked-eye astronomical visual visibility judgment
+    if (visual && this.el.telVisualBadge) {
+      const toneMap = {
+        VISIBLE_NAKED_EYE: 'naked',
+        VISIBLE_BINOCULAR: 'bino',
+        DAYTIME_SKY: 'day',
+        IN_EARTH_SHADOW: 'shadow',
+        TOO_FAINT: 'neutral',
+        BELOW_HORIZON: 'neutral',
+      };
+      const tone = toneMap[visual.status] || 'neutral';
+      this.el.telVisualBadge.textContent = visual.label;
+      this.el.telVisualBadge.className = `visual-badge ${tone}`;
+      this.el.telVisualDetail.textContent = visual.detail;
+      this.el.telSunlitTag.textContent = visual.sunlit ? '☀ 태양빛 반사 중' : '🌑 지구 그림자 (식)';
+      this.el.telSunlitTag.className = `visual-chip ${visual.sunlit ? 'lit' : 'dark'}`;
+      this.el.telSkyTag.textContent = `${visual.skyLabel} (${visual.sunElDeg.toFixed(0)}°)`;
+      this.el.telSkyTag.className = `visual-chip ${visual.skyState === 'day' ? 'day' : 'night'}`;
+      if (visual.estMag !== null) {
+        const sign = visual.estMag > 0 ? '+' : '';
+        this.el.telMagTag.textContent = `약 ${sign}${visual.estMag.toFixed(1)}등급`;
+      } else {
+        this.el.telMagTag.textContent = '밝기 --';
+      }
+    }
+
     if (passInfo) {
       this.renderPassInfo(passInfo);
     }
@@ -901,7 +953,7 @@ export class HudController {
 
   renderPassInfo(pass) {
     const sig = pass
-      ? `${pass.status}|${pass.aos ? pass.aos.getTime() : 0}|${pass.passes?.length || 0}|${Math.round(pass.maxElevationDeg || 0)}`
+      ? `${pass.status}|${pass.aos ? pass.aos.getTime() : 0}|${pass.passes?.length || 0}|${Math.round(pass.maxElevationDeg || 0)}|${pass.passes?.map((p) => p.visual?.status || '').join(',')}`
       : 'null';
     if (sig === this.lastPassSig) return;
     this.lastPassSig = sig;
@@ -924,21 +976,35 @@ export class HudController {
     }
 
     const list = Array.isArray(pass.passes) && pass.passes.length > 0 ? pass.passes : [pass];
+    const nakedCount = list.filter((item) => item.visual?.canSeeNakedEye).length;
     this.el.telPassBox.innerHTML = `
-      <div class="pass-list-heading">향후 48시간 상공 통과 일정 (${list.length}회)</div>
+      <div class="pass-list-heading">향후 48시간 상공 통과 일정 (${list.length}회${nakedCount > 0 ? ` · ★ 육안 관측 ${nakedCount}회` : ''})</div>
       <div class="pass-list">
         ${list
           .map((item, idx) => {
             const isNow = item.status === 'VISIBLE_NOW';
             const aosStr = item.aos ? fmtKstTime(item.aos) : '--';
             const durMin = item.durationSec ? `${Math.max(1, Math.round(item.durationSec / 60))}분` : '';
-            const jumpMs = item.aos ? item.aos.getTime() : 0;
+            const jumpMs = item.maxTime ? item.maxTime.getTime() : item.aos ? item.aos.getTime() : 0;
+            const v = item.visual;
+            let visBadgeHtml = '';
+            if (v?.status === 'VISIBLE_NAKED_EYE') {
+              const magTxt = v.estMag !== null ? ` ${v.estMag > 0 ? '+' : ''}${v.estMag.toFixed(1)}등` : '';
+              visBadgeHtml = `<span class="pass-vis-tag naked">★ 육안${magTxt}</span>`;
+            } else if (v?.status === 'VISIBLE_BINOCULAR') {
+              visBadgeHtml = `<span class="pass-vis-tag bino">쌍안경</span>`;
+            } else if (v?.status === 'IN_EARTH_SHADOW') {
+              visBadgeHtml = `<span class="pass-vis-tag dim">식</span>`;
+            } else if (v?.status === 'DAYTIME_SKY') {
+              visBadgeHtml = `<span class="pass-vis-tag dim">주간</span>`;
+            }
             return `
-              <div class="pass-row${idx === 0 ? ' is-next' : ''}">
+              <div class="pass-row${idx === 0 ? ' is-next' : ''}${v?.canSeeNakedEye ? ' is-naked-eye' : ''}">
                 <div class="pass-row-info">
                   <div class="pass-row-top">
                     <span class="pass-tag${isNow ? ' live' : ''}">${isNow ? '통과 중' : `#${idx + 1}`}</span>
                     <span class="pass-el">최대 <strong>${item.maxElevationDeg.toFixed(0)}°</strong>${durMin ? ` · ${durMin}` : ''}</span>
+                    ${visBadgeHtml}
                   </div>
                   <div class="pass-time mono">${aosStr} KST</div>
                 </div>

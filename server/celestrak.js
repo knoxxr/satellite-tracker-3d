@@ -227,6 +227,7 @@ async function readSharedSnapshot() {
         totalAvailable: satellites.length,
         satellites,
         recentIds: Array.isArray(meta.recentIds) ? meta.recentIds : [],
+        brightIds: Array.isArray(meta.brightIds) ? meta.brightIds : [],
       };
     }
   } catch {
@@ -305,19 +306,25 @@ function formatGroupResponse(groupName, entry, limit) {
  */
 function trySliceFromMaster(groupName, limit) {
   const master = memoryCache.get('all');
-  if (!master || !Array.isArray(master.satellites) || master.satellites.length < 2000) {
+  if (!master || !Array.isArray(master.satellites) || master.satellites.length < 1000) {
     return null;
   }
-  // Only slice 'recent' from master if we actually have recentIds recorded
-  const recentSet =
+  const recentIdSet =
     Array.isArray(master.recentIds) && master.recentIds.length > 0
       ? new Set(master.recentIds)
       : null;
-  if (groupName === 'recent' && !recentSet && master.satellites.length < 5000) {
+  const brightIdSet =
+    Array.isArray(master.brightIds) && master.brightIds.length > 0
+      ? new Set(master.brightIds)
+      : null;
+  if (groupName === 'recent' && !recentIdSet && master.satellites.length < 5000) {
     return null;
   }
-  const sliced = filterSatellitesByCategory(master.satellites, groupName, recentSet);
-  if (sliced.length === 0 && groupName !== 'recent') {
+  const sliced = filterSatellitesByCategory(master.satellites, groupName, {
+    recentIdSet,
+    brightIdSet,
+  });
+  if (sliced.length === 0 && !['recent', 'naro', 'heo', 'other'].includes(groupName)) {
     return null;
   }
   metrics.slicedFromMasterTotal += 1;
@@ -483,10 +490,10 @@ export async function getGroupSatellites(groupName, { forceRefresh = false, limi
     }
   }
 
-  if (groupName === 'featured') {
-    // If master wasn't populated yet, load 'all' once (single request) and slice featured
+  const MASTER_DERIVED_GROUPS = new Set(['featured', 'visual', 'naro', 'earth', 'heo', 'other']);
+  if (MASTER_DERIVED_GROUPS.has(groupName)) {
     await getGroupSatellites('all', { forceRefresh: false });
-    const sliced = trySliceFromMaster('featured', limit);
+    const sliced = trySliceFromMaster(groupName, limit);
     if (sliced) return sliced;
   }
 

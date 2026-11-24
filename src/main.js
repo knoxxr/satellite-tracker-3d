@@ -4,6 +4,8 @@ import { GoogleMaps3DEngine } from './engines/googleMaps3dEngine.js';
 import {
   OBSERVER_PRESETS,
   getCategoryColor,
+  getLaunchSiteLabel,
+  getOwnerLabel,
   getSatelliteDisplayInfo,
 } from './orbital/catalog.js';
 import {
@@ -11,6 +13,7 @@ import {
   buildRecordFromTle,
   computeLookAngles,
   computeOrbitTrack,
+  computeVisualVisibility,
   predictUpcomingPasses,
   propagateSatellite,
 } from './orbital/propagator.js';
@@ -266,11 +269,17 @@ class OrbitPulseApp {
     } else {
       this.filteredRecordsCache = all.filter((rec) => {
         const info = getSatelliteDisplayInfo(rec.id, rec.name);
+        const ownerText = rec.owner ? `${rec.owner} ${getOwnerLabel(rec.owner)}`.toLowerCase() : '';
+        const siteText = rec.launchSite
+          ? `${rec.launchSite} ${getLaunchSiteLabel(rec.launchSite)}`.toLowerCase()
+          : '';
         return (
           rec.name.toLowerCase().includes(q) ||
           info.title.toLowerCase().includes(q) ||
           String(rec.id).includes(q) ||
-          rec.regime.toLowerCase().includes(q)
+          rec.regime.toLowerCase().includes(q) ||
+          ownerText.includes(q) ||
+          siteText.includes(q)
         );
       });
     }
@@ -844,14 +853,17 @@ class OrbitPulseApp {
     const rec = this.recordById.get(this.state.selectedId);
     const pos = this.positionsMap.get(this.state.selectedId);
     if (!rec || !pos) return;
+    const simDate = new Date(this.state.simTimeMs);
     const look = computeLookAngles(pos, this.state.observer);
+    const visual = computeVisualVisibility(rec, pos, look, this.state.observer, simDate);
     this.hud.updateTelemetry(
       rec,
       pos,
       look,
       this.state.observer,
       this.cachedPassInfo,
-      this.state.favorites.has(rec.id)
+      this.state.favorites.has(rec.id),
+      visual
     );
   }
 
